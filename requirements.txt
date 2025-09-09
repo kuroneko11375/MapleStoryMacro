@@ -1,0 +1,31 @@
+# 楓之谷宏工具相依套件列表
+# Maple Macro GUI Requirements
+
+# GUI 框架
+# tkinter - 內建於 Python，無需安裝
+
+# 按鍵控制
+keyboard>=1.13.0          # 全域按鍵監聽
+pydirectinput>=1.0.4      # 按鍵模擬 (DirectInput 相容)
+
+# 螢幕與圖像處理
+pyautogui>=0.9.54         # 螢幕截圖和基本自動化
+opencv-python>=4.5.0      # 圖像處理和模板匹配
+numpy>=1.21.0             # 數值計算 (OpenCV 依賴)
+Pillow>=8.0.0             # 圖像處理庫
+
+# Windows 系統 API
+pywin32>=227              # Windows API 訪問 (視窗控制)
+
+# 剪貼簿操作
+pyperclip>=1.8.0          # 剪貼簿讀寫
+
+# 可選：效能優化
+# numba>=0.56.0           # JIT 編譯加速 (可選)
+# psutil>=5.8.0           # 系統監控 (可選)
+
+# 開發與測試 (可選)
+# pytest>=6.0.0          # 單元測試框架
+# pytest-cov>=2.0.0      # 測試覆蓋率
+# black>=21.0.0           # 程式碼格式化
+# flake8>=3.9.0           # 程式碼檢查
