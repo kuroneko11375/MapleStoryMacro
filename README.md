@@ -60,4 +60,6 @@ pip install keyboard pydirectinput pyautogui pyperclip opencv-python numpy pillo
 ---
 
 ## 📄 授權
-本專案採用 [MIT License](https://github.com/kuroneko11375/MapleStoryMacro/blob/main/LICENSE)。
+
+本專案採用 MIT 授權條款 [MIT License](https://github.com/kuroneko11375/Salary-Calculator/blob/main/LICENSE).
+
