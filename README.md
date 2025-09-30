@@ -58,12 +58,13 @@ pip install keyboard pydirectinput pyautogui pyperclip opencv-python numpy pillo
 - 設定持久化：自動保存小地圖區域到 `minimap_config.json`。
 
 ---
-25/09/29 修正若干功能
+## 25/09/29 修正若干功能
 
- ✅ 正確錄製持續按住的按鍵
- ✅ 擴展鍵盤所有按鍵(可識別數字鍵盤差別)
- ✅ 支持復雜的按鍵組合
+✅ 正確錄製持續按住的按鍵
 
+✅ 擴展鍵盤所有按鍵(可識別數字鍵盤差別)
+
+✅ 支持復雜的按鍵組合
 
 ---
 
