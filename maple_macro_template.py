@@ -2,7 +2,7 @@
 """
 楓之谷自動化腳本
 作者：SchwarzeKatze_R
-版本：1.0
+版本：1.0.1
 """
 
 import warnings
