@@ -1,8 +1,3 @@
-"""
-楓之谷自動化腳本
-作者：SchwarzeKatze_R
-版本：1.0
-"""
 #!/usr/bin/env python3
 """
 楓之谷自動化腳本
@@ -292,7 +287,7 @@ class MacroApp:
             if win32gui.IsWindowVisible(hwnd):
                 title = win32gui.GetWindowText(hwnd)
                 # 檢測包含指定關鍵字的視窗
-                if any(keyword in title for keyword in ["MapleStory", "楓之谷", "Maple", "楓谷"]):
+                if any(keyword in title for keyword in ["MapleStory", "幽靈谷"]):
                     try:
                         class_name = win32gui.GetClassName(hwnd)
                         if class_name and class_name not in ["Shell_TrayWnd", "Button"]:
@@ -434,13 +429,16 @@ class MacroApp:
 
             self.current_recorded_events = []
             last_state = set()
+            key_press_times = {}  # 記錄每個按鍵的最後按下時間
             check_interval = 0.01
             last_event_time = None
             relative_time = 0
+            continuous_press_interval = 0.1  # 持續按住的檢查間隔
             
             def check_keys():
                 nonlocal last_state, relative_time, last_event_time
                 current_state = set()
+                current_time = time.perf_counter()
                 
                 monitored_keys = [
                     'left', 'right', 'up', 'down',
@@ -455,21 +453,40 @@ class MacroApp:
                 for key in monitored_keys:
                     if keyboard.is_pressed(key):
                         current_state.add(key)
-                
+                        # 檢查是否需要產生持續按住事件
+                        if key in last_state:
+                            last_press_time = key_press_times.get(key, 0)
+                            if current_time - last_press_time >= continuous_press_interval:
+                                # 更新按鍵時間戳
+                                key_press_times[key] = current_time
+                                # 產生持續按住事件
+                                if last_event_time is not None:
+                                    time_diff = current_time - last_event_time
+                                    relative_time = self.current_recorded_events[-1]['time'] + time_diff if self.current_recorded_events else time_diff
+                                current_x, current_y = self.get_current_position()
+                                event_data = {
+                                    'type': 'keyboard',
+                                    'event': key,
+                                    'event_type': 'hold',  # 新增的持續按住事件類型
+                                    'time': round(relative_time, 3),
+                                    'pressed_keys': list(current_state),
+                                    'position': {'x': current_x, 'y': current_y} if current_x is not None else None
+                                }
+                                self.current_recorded_events.append(event_data)
+                                print(f"🔄 錄製持續按住 {key}")
+                                last_event_time = current_time
+                        else:
+                            # 新按下的按鍵，記錄時間戳
+                            key_press_times[key] = current_time
+
                 if current_state != last_state:
-                    current_time = time.perf_counter()
-                    
                     if last_event_time is None:
                         relative_time = 0
                     else:
                         time_diff = current_time - last_event_time
-                        if self.current_recorded_events:
-                            relative_time = self.current_recorded_events[-1]['time'] + time_diff
-                        else:
-                            relative_time = time_diff
+                        relative_time = self.current_recorded_events[-1]['time'] + time_diff if self.current_recorded_events else time_diff
                     
                     last_event_time = current_time
-                    
                     new_pressed = current_state - last_state
                     new_released = last_state - current_state
                     
@@ -751,6 +768,11 @@ class MacroApp:
                                             self.deviation_start_time = None
                                             self.is_currently_deviating = False
                             
+                            # 處理持續按住事件
+                            if event['event_type'] == 'hold':
+                                # 如果已經按下，則繼續保持按下狀態
+                                continue
+                            
                             key_mapping = {
                                 'space': 'space',
                                 'shift': 'shiftleft',
@@ -838,6 +860,17 @@ class MacroApp:
                                                     pydirectinput.keyDown(key)
                                                 except Exception:
                                                     pass
+                            elif event['event_type'] == 'hold':
+                                # 處理持續按住事件 - 確保按鍵保持按下狀態
+                                if self.suppress_space_until_loop_end and current_key == 'space':
+                                    print("⏭️ 抑制 space (hold)")
+                                else:
+                                    # 對於持續按住，確保按鍵是按下的
+                                    try:
+                                        pydirectinput.keyDown(current_key)
+                                        print(f"🔄 持續按住: {current_key}")
+                                    except Exception:
+                                        pass
                             else:
                                 if self.suppress_space_until_loop_end and current_key == 'space':
                                     print("⏭️ 抑制 space (up)")
@@ -1003,7 +1036,7 @@ class MacroApp:
             try:
                 # 第二步：複製回程指令到剪貼簿
                 print("  2. 複製回程指令到剪貼簿")
-                pyperclip.copy('@回城')  # 範例指令，請根據實際遊戲修改
+                pyperclip.copy('@FM')  # 範例指令，請根據實際遊戲修改
                 time.sleep(0.2)
                 
                 # 第三步：貼上指令 (Ctrl+V)
