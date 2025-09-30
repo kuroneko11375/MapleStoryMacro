@@ -78,8 +78,9 @@ class MacroApp:
         self.correction_pause_event.set()
         self.is_correcting = False
 
-        # 技能連發設置
-        self.skill_keys = ['z', 'x', 'c', 'v', 'a', 's', 'd', 'f', 'g', 'h', 'q', 'w', 'e', 'r', 't']
+        # 技能連發設置 (完整字母表)
+        self.skill_keys = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
+                          'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
         self.last_skill_time = {}
         self.skill_repeat_interval = 0.05
 
@@ -287,7 +288,7 @@ class MacroApp:
             if win32gui.IsWindowVisible(hwnd):
                 title = win32gui.GetWindowText(hwnd)
                 # 檢測包含指定關鍵字的視窗
-                if any(keyword in title for keyword in ["MapleStory", "幽靈谷"]):
+                if any(keyword in title for keyword in ["楓之谷"]):
                     try:
                         class_name = win32gui.GetClassName(hwnd)
                         if class_name and class_name not in ["Shell_TrayWnd", "Button"]:
@@ -441,13 +442,25 @@ class MacroApp:
                 current_time = time.perf_counter()
                 
                 monitored_keys = [
+                    # 方向鍵
                     'left', 'right', 'up', 'down',
-                    'space', 'alt', 'ctrl', 'shift',
-                    'a', 's', 'd', 'f',
-                    'q', 'w', 'e', 'r',
-                    'z', 'x', 'c', 'v',
-                    '1', '2', '3', '4', '5',
-                    '6', '7', '8', '9', '0'
+                    # 修飾鍵
+                    'space', 'alt', 'ctrl', 'shift', 'tab', 'enter', 'backspace', 'delete',
+                    'insert', 'home', 'end', 'page up', 'page down', 'esc',
+                    # 完整字母表
+                    'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
+                    'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+                    # 數字鍵
+                    '1', '2', '3', '4', '5', '6', '7', '8', '9', '0',
+                    # 符號鍵
+                    '-', '=', '[', ']', '\\', ';', "'", ',', '.', '/', '`',
+                    # 功能鍵
+                    'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8', 'f9', 'f10', 'f11', 'f12',
+                    # 小鍵盤
+                    'num 0', 'num 1', 'num 2', 'num 3', 'num 4', 'num 5', 'num 6', 'num 7', 'num 8', 'num 9',
+                    'num /', 'num *', 'num -', 'num +', 'num .', 'num enter', 'num lock',
+                    # 滑鼠按鍵 (如果需要的話)
+                    # 'left click', 'right click', 'middle click'
                 ]
                 
                 for key in monitored_keys:
@@ -774,6 +787,7 @@ class MacroApp:
                                 continue
                             
                             key_mapping = {
+                                # 修飾鍵
                                 'space': 'space',
                                 'shift': 'shiftleft',
                                 'right shift': 'shiftright',
@@ -784,45 +798,51 @@ class MacroApp:
                                 'enter': 'enter',
                                 'tab': 'tab',
                                 'backspace': 'backspace',
-                                'esc': 'esc',
-                                'f1': 'f1', 'f2': 'f2', 'f3': 'f3', 'f4': 'f4',
-                                'f5': 'f5', 'f6': 'f6', 'f7': 'f7', 'f8': 'f8',
-                                'f9': 'f9', 'f10': 'f10', 'f11': 'f11', 'f12': 'f12',
                                 'delete': 'delete',
                                 'insert': 'insert',
                                 'home': 'home',
                                 'end': 'end',
                                 'page up': 'pageup',
                                 'page down': 'pagedown',
-                                # 修正方向鍵映射 - 確保不會被當作數字
-                                'left': 'left',
-                                'right': 'right',
-                                'up': 'up',
-                                'down': 'down',
-                                # 可能的方向鍵別名
-                                'arrow left': 'left',
-                                'arrow right': 'right', 
-                                'arrow up': 'up',
-                                'arrow down': 'down',
-                                'left arrow': 'left',
-                                'right arrow': 'right',
-                                'up arrow': 'up',
-                                'down arrow': 'down',
-                                # 小鍵盤相關
+                                'esc': 'esc',
+                                
+                                # 功能鍵
+                                'f1': 'f1', 'f2': 'f2', 'f3': 'f3', 'f4': 'f4',
+                                'f5': 'f5', 'f6': 'f6', 'f7': 'f7', 'f8': 'f8',
+                                'f9': 'f9', 'f10': 'f10', 'f11': 'f11', 'f12': 'f12',
+                                
+                                # 方向鍵
+                                'left': 'left', 'right': 'right', 'up': 'up', 'down': 'down',
+                                'arrow left': 'left', 'arrow right': 'right', 
+                                'arrow up': 'up', 'arrow down': 'down',
+                                'left arrow': 'left', 'right arrow': 'right',
+                                'up arrow': 'up', 'down arrow': 'down',
+                                
+                                # 字母鍵 (完整字母表)
+                                'a': 'a', 'b': 'b', 'c': 'c', 'd': 'd', 'e': 'e',
+                                'f': 'f', 'g': 'g', 'h': 'h', 'i': 'i', 'j': 'j',
+                                'k': 'k', 'l': 'l', 'm': 'm', 'n': 'n', 'o': 'o',
+                                'p': 'p', 'q': 'q', 'r': 'r', 's': 's', 't': 't',
+                                'u': 'u', 'v': 'v', 'w': 'w', 'x': 'x', 'y': 'y', 'z': 'z',
+                                
+                                # 數字鍵
+                                '1': '1', '2': '2', '3': '3', '4': '4', '5': '5',
+                                '6': '6', '7': '7', '8': '8', '9': '9', '0': '0',
+                                
+                                # 符號鍵
+                                '-': '-', '=': '=', '[': '[', ']': ']', '\\': '\\',
+                                ';': ';', "'": "'", ',': ',', '.': '.', '/': '/',
+                                '`': '`',
+                                
+                                # 小鍵盤
                                 'num lock': 'numlock',
                                 'num 0': 'num0', 'num 1': 'num1', 'num 2': 'num2',
                                 'num 3': 'num3', 'num 4': 'num4', 'num 5': 'num5',
                                 'num 6': 'num6', 'num 7': 'num7', 'num 8': 'num8',
                                 'num 9': 'num9',
-                                'num /': 'divide',
-                                'num *': 'multiply',
-                                'num -': 'subtract',
-                                'num +': 'add',
-                                'num .': 'decimal',
-                                'num enter': 'enter',
-                                # 確保數字鍵不會被誤用作方向鍵
-                                '1': '1', '2': '2', '3': '3', '4': '4', '5': '5',
-                                '6': '6', '7': '7', '8': '8', '9': '9', '0': '0'
+                                'num /': 'divide', 'num *': 'multiply',
+                                'num -': 'subtract', 'num +': 'add',
+                                'num .': 'decimal', 'num enter': 'enter'
                             }
                             
                             current_key = key_mapping.get(event['event'], event['event'])
