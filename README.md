@@ -61,11 +61,7 @@ pip install keyboard pydirectinput pyautogui pyperclip opencv-python numpy pillo
 25/09/29 修正若干功能
 
  ✅ 正確錄製持續按住的按鍵
- 
- ✅ 在播放時正確重現持續按住的動作
- 
- ✅ 記錄持續按住期間的位置變化
- 
+ ✅ 擴展鍵盤所有按鍵(可識別數字鍵盤差別)
  ✅ 支持復雜的按鍵組合
 
 
