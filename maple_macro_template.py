@@ -55,7 +55,7 @@ class MacroApp:
         print("初始化 MacroApp...")
         
         # 初始化小地圖相關變數 (必須在最前面)
-        self.minimap_var = tk.BooleanVar(value=True)  # 預設啟用小地圖
+        self.minimap_var = tk.BooleanVar(value=False)  # 預設關閉小地圖
         
         # 初始化變數
         self.events = []
@@ -101,7 +101,7 @@ class MacroApp:
         self.suppress_space_until_loop_end = False  # 校正後本迴圈抑制跳躍
 
         # 視窗與佈局
-        self.root.geometry("550x530")
+        self.root.geometry("560x530")
         
         # 強制置頂顯示
         self.root.attributes('-topmost', True)
@@ -196,7 +196,9 @@ class MacroApp:
 
         ttk.Button(file_frame, text="保存腳本", command=self.save_macro).grid(row=0, column=0, padx=2, pady=2)
         ttk.Button(file_frame, text="載入腳本", command=self.load_macro).grid(row=0, column=1, padx=2, pady=2)
-        ttk.Button(file_frame, text="清除暫存", command=self.clear_macro).grid(row=1, column=0, columnspan=2, padx=2, pady=2)
+        ttk.Button(file_frame, text="清除暫存", command=self.clear_macro).grid(row=1, column=0, padx=2, pady=2)
+        ttk.Button(file_frame, text="查看事件", command=self.debug_events).grid(row=1, column=1, padx=2, pady=2)
+        ttk.Button(file_frame, text="測試連發", command=self.test_rapid_fire).grid(row=2, column=0, padx=2, pady=2)
 
         # 播放控制
         playback_frame = ttk.LabelFrame(left_panel, text="播放控制", padding=5)
@@ -273,11 +275,11 @@ class MacroApp:
         ttk.Button(test_frame, text="停止監控", command=self.stop_minimap_monitoring).pack(side="left", padx=2)
 
         # 自動回程選項
-        self.return_var = tk.BooleanVar(value=True)
+        self.return_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(playback_frame, text="結束時回程", variable=self.return_var).grid(row=2, column=0, columnspan=2)
 
         # 位置驗證選項
-        self.position_check_var = tk.BooleanVar(value=True)
+        self.position_check_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(playback_frame, text="位置驗證", variable=self.position_check_var).grid(row=3, column=0, columnspan=2)
 
         # 設定框架權重
@@ -288,11 +290,13 @@ class MacroApp:
         def callback(hwnd, windows):
             if win32gui.IsWindowVisible(hwnd):
                 title = win32gui.GetWindowText(hwnd)
-                # 檢測包含指定關鍵字的視窗
-                if any(keyword in title for keyword in ["幽靈谷"]):
+                # 檢測包含指定關鍵字的視窗，並過濾掉非遊戲視窗
+                if any(keyword in title for keyword in ["MapleStory", "幽靈谷"]):
                     try:
                         class_name = win32gui.GetClassName(hwnd)
-                        if class_name and class_name not in ["Shell_TrayWnd", "Button"]:
+                        # 排除 Discord、Chrome 等非遊戲視窗
+                        if (class_name and class_name not in ["Shell_TrayWnd", "Button", "Chrome_WidgetWin_1"] 
+                            and "Discord" not in title and "Chrome" not in title and "瀏覽器" not in title):
                             windows.append((title, hwnd, class_name))
                     except:
                         pass
@@ -318,20 +322,33 @@ class MacroApp:
                     label = ttk.Label(select_window, text="請選擇正確的遊戲視窗:")
                     label.pack(pady=5)
                     
-                    listbox = tk.Listbox(select_window)
+                    listbox = tk.Listbox(select_window, height=len(choices))
                     for choice in choices:
                         listbox.insert(tk.END, choice)
                     listbox.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
                     
+                    # 預設選擇第一個
+                    if choices:
+                        listbox.selection_set(0)
+                    
                     def on_select():
-                        if listbox.curselection():
-                            index = listbox.curselection()[0]
+                        selection = listbox.curselection()
+                        if selection:
+                            index = selection[0]
                             self.hooked_hwnd = windows[index][1]
                             self.window_status.config(text=f"視窗狀態: 已鎖定 ({windows[index][0]})")
-                            # 僅記錄視窗，不再附加記憶體
+                            print(f"✅ 已選擇視窗: {windows[index][0]} (句柄: {windows[index][1]})")
                             select_window.destroy()
+                        else:
+                            print("⚠️ 請選擇一個視窗")
                     
-                    ttk.Button(select_window, text="確定", command=on_select).pack(pady=5)
+                    # 支援雙擊選擇
+                    listbox.bind('<Double-Button-1>', lambda e: on_select())
+                    
+                    button_frame = ttk.Frame(select_window)
+                    button_frame.pack(pady=5)
+                    ttk.Button(button_frame, text="確定", command=on_select).pack(side=tk.LEFT, padx=5)
+                    ttk.Button(button_frame, text="取消", command=select_window.destroy).pack(side=tk.LEFT, padx=5)
                     
                     self.root.wait_window(select_window)
                     return True
@@ -440,12 +457,25 @@ class MacroApp:
             check_interval = 0.01
             last_event_time = None
             relative_time = 0
-            continuous_press_interval = 0.1  # 持續按住的檢查間隔
+            continuous_press_interval = 0.05  # 持續按住的檢查間隔，縮短為50ms
+            
+            print("🎯 開始錄製 - 請在遊戲窗口中操作")
+            print("⚠️ 注意：請避免在錄製期間點擊本程序界面")
             
             def check_keys():
                 nonlocal last_state, relative_time, last_event_time
                 current_state = set()
                 current_time = time.perf_counter()
+                
+                # 檢查當前活動窗口是否是遊戲窗口
+                try:
+                    current_hwnd = win32gui.GetForegroundWindow()
+                    if current_hwnd != self.hooked_hwnd:
+                        # 如果不是遊戲窗口，跳過這次檢查
+                        return
+                except:
+                    # 如果檢查失敗，繼續錄制
+                    pass
                 
                 # 修復小鍵盤按鍵名稱，使用正確的 keyboard 庫格式
                 monitored_keys = [
@@ -468,44 +498,54 @@ class MacroApp:
                     'keypad 5', 'keypad 6', 'keypad 7', 'keypad 8', 'keypad 9',
                     'keypad /', 'keypad *', 'keypad -', 'keypad +', 'keypad .', 'keypad enter',
                     'num lock',
-                    # 滑鼠按鍵 (如果需要的話)
-                    # 'left click', 'right click', 'middle click'
                 ]
                 
+                # 檢測目前按下的按鍵
                 for key in monitored_keys:
                     try:
                         if keyboard.is_pressed(key):
                             current_state.add(key)
-                            # 檢查是否需要產生持續按住事件
-                            if key in last_state:
-                                last_press_time = key_press_times.get(key, 0)
-                                if current_time - last_press_time >= continuous_press_interval:
-                                    # 更新按鍵時間戳
-                                    key_press_times[key] = current_time
-                                    # 產生持續按住事件
-                                    if last_event_time is not None:
-                                        time_diff = current_time - last_event_time
-                                        relative_time = self.current_recorded_events[-1]['time'] + time_diff if self.current_recorded_events else time_diff
-                                    current_x, current_y = self.get_current_position()
-                                    event_data = {
-                                        'type': 'keyboard',
-                                        'event': key,
-                                        'event_type': 'hold',  # 新增的持續按住事件類型
-                                        'time': round(relative_time, 3),
-                                        'pressed_keys': list(current_state),
-                                        'position': {'x': current_x, 'y': current_y} if current_x is not None else None
-                                    }
-                                    self.current_recorded_events.append(event_data)
-                                    print(f"🔄 錄製持續按住 {key}")
-                                    last_event_time = current_time
-                            else:
-                                # 新按下的按鍵，記錄時間戳
-                                key_press_times[key] = current_time
                     except Exception as e:
-                        # 忽略無法識別的按鍵
                         if 'not mapped' not in str(e):
                             print(f"⚠️ 按鍵檢測錯誤 {key}: {e}")
                         continue
+                
+                # 處理持續按住的按鍵
+                for key in current_state:
+                    if key in last_state:
+                        # 按鍵持續按住中
+                        last_press_time = key_press_times.get(key, 0)
+                        if current_time - last_press_time >= continuous_press_interval:
+                            # 生成持續按住事件
+                            key_press_times[key] = current_time
+                            
+                            # 計算相對時間
+                            if last_event_time is None:
+                                relative_time = 0
+                            else:
+                                time_diff = current_time - last_event_time
+                                relative_time = self.current_recorded_events[-1]['time'] + time_diff if self.current_recorded_events else time_diff
+                            
+                            current_x, current_y = self.get_current_position()
+                            event_data = {
+                                'type': 'keyboard',
+                                'event': key,
+                                'event_type': 'hold',
+                                'time': round(relative_time, 3),
+                                'pressed_keys': list(current_state),
+                                'position': {'x': current_x, 'y': current_y} if current_x is not None else None
+                            }
+                            self.current_recorded_events.append(event_data)
+                            print(f"🔄 持續按住 {key} (時間: {relative_time:.3f}s, 間隔: {current_time - last_press_time:.3f}s)")
+                            last_event_time = current_time
+                            
+                            # 更新狀態顯示
+                            self.root.after(0, lambda count=len(self.current_recorded_events): self.recording_status.config(
+                                text=f"錄製狀態: 錄製中 | 事件數: {count} | 🔄 持續按住 {key}"
+                            ))
+                    else:
+                        # 新按下的按鍵
+                        key_press_times[key] = current_time
 
                 if current_state != last_state:
                     if last_event_time is None:
@@ -651,6 +691,9 @@ class MacroApp:
 
     def _playback_thread(self):
         completed_normally = False
+        # 追蹤目前按下的按鍵狀態，避免重複按下/釋放
+        currently_pressed_keys = set()
+        
         try:
             if self.hooked_hwnd:
                 for _ in range(3):
@@ -798,7 +841,19 @@ class MacroApp:
                             
                             # 處理持續按住事件
                             if event['event_type'] == 'hold':
-                                # 如果已經按下，則繼續保持按下狀態
+                                # 執行快速連發來模擬持續按住
+                                current_key = event['event']
+                                try:
+                                    print(f"🔄 執行hold連發: {current_key}")
+                                    # 減少連發次數，讓效果更接近實際按住
+                                    for i in range(2):  # 從3次改為2次
+                                        pydirectinput.keyDown(current_key)
+                                        time.sleep(0.005)
+                                        pydirectinput.keyUp(current_key)
+                                        time.sleep(0.015)
+                                    print(f"⚡ Hold連發完成: {current_key} (2次)")
+                                except Exception as e:
+                                    print(f"❌ Hold事件執行錯誤: {e}")
                                 continue
                             
                             key_mapping = {
@@ -882,38 +937,55 @@ class MacroApp:
                                     elif current_key in ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']:
                                         print(f"🔢 執行數字鍵: {current_key}")
                                     
-                                    if current_key in self.skill_keys:
-                                        self.execute_skill_with_repeat(current_key, pressed_keys)
-                                    else:
-                                        try:
-                                            pydirectinput.keyDown(current_key)
-                                        except Exception:
-                                            pass
-                                        for key in pressed_keys:
-                                            if key != current_key:
-                                                try:
-                                                    pydirectinput.keyDown(key)
-                                                except Exception:
-                                                    pass
+                                    # 確保按鍵沒有重複按下
+                                    if current_key not in currently_pressed_keys:
+                                        currently_pressed_keys.add(current_key)
+                                        
+                                        if current_key in self.skill_keys:
+                                            self.execute_skill_with_repeat(current_key, pressed_keys)
+                                        else:
+                                            try:
+                                                pydirectinput.keyDown(current_key)
+                                            except Exception:
+                                                pass
+                                            for key in pressed_keys:
+                                                if key != current_key and key not in currently_pressed_keys:
+                                                    try:
+                                                        pydirectinput.keyDown(key)
+                                                        currently_pressed_keys.add(key)
+                                                    except Exception:
+                                                        pass
                             elif event['event_type'] == 'hold':
-                                # 處理持續按住事件 - 確保按鍵保持按下狀態
+                                # 處理持續按住事件 - 使用有效的快速連發
                                 if self.suppress_space_until_loop_end and current_key == 'space':
                                     print("⏭️ 抑制 space (hold)")
                                 else:
-                                    # 對於持續按住，確保按鍵是按下的
                                     try:
-                                        pydirectinput.keyDown(current_key)
-                                        print(f"🔄 持續按住: {current_key}")
-                                    except Exception:
-                                        pass
-                            else:
+                                        print(f"🔄 執行連發: {current_key}")
+                                        
+                                        # 減少連發次數，讓效果更接近實際按住
+                                        for i in range(2):  # 從3次改為2次
+                                            pydirectinput.keyDown(current_key)
+                                            time.sleep(0.005)
+                                            pydirectinput.keyUp(current_key)
+                                            time.sleep(0.015)
+                                        
+                                        print(f"⚡ 連發完成: {current_key} (2次)")
+                                        
+                                    except Exception as e:
+                                        print(f"❌ Hold事件執行錯誤: {e}")
+                            else:  # event_type == 'up'
                                 if self.suppress_space_until_loop_end and current_key == 'space':
                                     print("⏭️ 抑制 space (up)")
                                 else:
-                                    try:
-                                        pydirectinput.keyUp(current_key)
-                                    except Exception:
-                                        pass
+                                    # 釋放按鍵
+                                    if current_key in currently_pressed_keys:
+                                        try:
+                                            pydirectinput.keyUp(current_key)
+                                            currently_pressed_keys.remove(current_key)
+                                            print(f"🔓 釋放按鍵: {current_key}")
+                                        except Exception:
+                                            pass
                             
                             print(f"Playing: {event['event']} {event['event_type']}")
                             print(f"All pressed keys: {pressed_keys}")
@@ -929,10 +1001,31 @@ class MacroApp:
                     time.sleep(0.5)
             
             completed_normally = True
+            
+            # 清理所有按鍵狀態
+            print("🧹 清理按鍵狀態...")
+            for key in list(currently_pressed_keys):
+                try:
+                    pydirectinput.keyUp(key)
+                    print(f"🔓 釋放殘留按鍵: {key}")
+                except Exception:
+                    pass
+            currently_pressed_keys.clear()
+            
             self.playing = False
             self.root.after(0, lambda: self._update_after_playback(completed_normally))
             
         except Exception as e:
+            # 異常情況下也要清理按鍵狀態
+            print("🧹 異常情況下清理按鍵狀態...")
+            for key in list(currently_pressed_keys):
+                try:
+                    pydirectinput.keyUp(key)
+                    print(f"🔓 釋放殘留按鍵: {key}")
+                except Exception:
+                    pass
+            currently_pressed_keys.clear()
+            
             self.playing = False
             messagebox.showerror("錯誤", f"播放過程中發生錯誤: {str(e)}")
             self.root.after(0, lambda: self._update_after_playback(False))
@@ -1145,6 +1238,163 @@ class MacroApp:
                 self.recording_status.config(text=f"已載入: {filename} | 事件數: {len(self.events)}")
             except Exception as e:
                 messagebox.showerror("錯誤", f"載入失敗: {str(e)}")
+
+    def debug_events(self):
+        """調試功能：顯示錄製的事件"""
+        if not self.events:
+            messagebox.showinfo("調試", "沒有錄製的事件")
+            return
+        
+        debug_window = tk.Toplevel(self.root)
+        debug_window.title("事件調試")
+        debug_window.geometry("600x400")
+        
+        # 創建文本框顯示事件
+        text_frame = ttk.Frame(debug_window)
+        text_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        text_widget = tk.Text(text_frame, wrap=tk.WORD)
+        scrollbar = ttk.Scrollbar(text_frame, orient=tk.VERTICAL, command=text_widget.yview)
+        text_widget.configure(yscrollcommand=scrollbar.set)
+        
+        text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # 分析事件統計
+        event_stats = {}
+        hold_events = []
+        
+        for i, event in enumerate(self.events):
+            event_type = event['event_type']
+            key = event['event']
+            
+            if event_type not in event_stats:
+                event_stats[event_type] = 0
+            event_stats[event_type] += 1
+            
+            if event_type == 'hold':
+                hold_events.append((i, event))
+        
+        # 顯示統計信息
+        debug_text = f"=== 事件統計 ===\n"
+        debug_text += f"總事件數: {len(self.events)}\n"
+        for event_type, count in event_stats.items():
+            debug_text += f"{event_type} 事件: {count} 個\n"
+        
+        debug_text += f"\n=== Hold事件詳情 ===\n"
+        for idx, (event_idx, event) in enumerate(hold_events[:10]):  # 只顯示前10個
+            debug_text += f"Hold #{idx+1} (索引{event_idx}): {event['event']} 在 {event['time']:.3f}s\n"
+        
+        if len(hold_events) > 10:
+            debug_text += f"... 還有 {len(hold_events) - 10} 個 hold 事件\n"
+        
+        debug_text += f"\n=== 前20個事件詳情 ===\n"
+        for i, event in enumerate(self.events[:20]):
+            debug_text += f"{i:3d}: {event['time']:7.3f}s - {event['event']:8s} {event['event_type']:5s}\n"
+        
+        if len(self.events) > 20:
+            debug_text += f"... 還有 {len(self.events) - 20} 個事件\n"
+        
+        text_widget.insert(tk.END, debug_text)
+        text_widget.config(state=tk.DISABLED)
+
+    def test_rapid_fire(self):
+        """測試連發功能"""
+        test_window = tk.Toplevel(self.root)
+        test_window.title("連發測試")
+        test_window.geometry("300x200")
+        
+        ttk.Label(test_window, text="選擇要測試的按鍵:").pack(pady=10)
+        
+        key_var = tk.StringVar(value="z")
+        key_entry = ttk.Entry(test_window, textvariable=key_var, width=10)
+        key_entry.pack(pady=5)
+        
+        def do_test():
+            key = key_var.get().lower()
+            print(f"開始測試連發: {key}")
+            
+            # 等待5秒讓用戶切換到遊戲窗口
+            for i in range(5, 0, -1):
+                print(f"倒數 {i} 秒...")
+                time.sleep(1)
+            
+            print("開始連發測試!")
+            
+            # 測試不同的連發方式，每種之間有明顯間隔
+            try:
+                # 方式1: 慢速測試 - 先讓用戶看到單次按鍵效果
+                print("=== 方式1: 單次按鍵測試 (5次，間隔1秒) ===")
+                for i in range(5):
+                    print(f"  單次按鍵 {i+1}/5")
+                    pydirectinput.press(key)
+                    time.sleep(1)
+                print("=== 方式1: 完成 ===")
+                
+                time.sleep(3)  # 長間隔便於區分
+                
+                # 方式2: 中速連發
+                print("=== 方式2: 中速連發 (持續5秒，每秒約10次) ===")
+                start_time = time.time()
+                count = 0
+                while time.time() - start_time < 5.0:
+                    pydirectinput.press(key)
+                    count += 1
+                    time.sleep(0.1)  # 每100ms一次
+                print(f"=== 方式2: 完成 (共 {count} 次) ===")
+                
+                time.sleep(3)
+                
+                # 方式3: 快速連發
+                print("=== 方式3: 快速連發 (持續5秒，每秒約50次) ===")
+                start_time = time.time()
+                count = 0
+                while time.time() - start_time < 5.0:
+                    pydirectinput.keyDown(key)
+                    time.sleep(0.005)
+                    pydirectinput.keyUp(key)
+                    time.sleep(0.015)
+                    count += 1
+                print(f"=== 方式3: 完成 (共 {count} 次) ===")
+                
+                time.sleep(3)
+                
+                # 方式4: 極速連發
+                print("=== 方式4: 極速連發 (持續5秒，每秒約100次) ===")
+                start_time = time.time()
+                count = 0
+                while time.time() - start_time < 5.0:
+                    pydirectinput.keyDown(key)
+                    time.sleep(0.001)
+                    pydirectinput.keyUp(key)
+                    time.sleep(0.009)
+                    count += 1
+                print(f"=== 方式4: 完成 (共 {count} 次) ===")
+                
+                time.sleep(3)
+                
+                # 方式5: 持續按住
+                print("=== 方式5: 持續按住不放 (5秒) ===")
+                pydirectinput.keyDown(key)
+                time.sleep(5.0)
+                pydirectinput.keyUp(key)
+                print("=== 方式5: 完成 ===")
+                
+                print("所有測試完成! 請告訴我哪種方式效果最好")
+                
+            except Exception as e:
+                print(f"測試錯誤: {e}")
+                # 確保釋放按鍵
+                try:
+                    pydirectinput.keyUp(key)
+                except:
+                    pass
+        
+        ttk.Button(test_window, text="開始測試 (3秒後)", 
+                  command=lambda: threading.Thread(target=do_test, daemon=True).start()).pack(pady=10)
+        
+        ttk.Label(test_window, text="請在測試開始前切換到遊戲窗口", 
+                 foreground="red").pack(pady=5)
 
     def clear_macro(self):
         if self.events:
