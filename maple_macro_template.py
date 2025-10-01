@@ -101,7 +101,7 @@ class MacroApp:
         self.suppress_space_until_loop_end = False  # 校正後本迴圈抑制跳躍
 
         # 視窗與佈局
-        self.root.geometry("560x530")
+        self.root.geometry("590x580")
         
         # 強制置頂顯示
         self.root.attributes('-topmost', True)
@@ -220,12 +220,28 @@ class MacroApp:
         right_panel.grid(row=0, column=1, padx=5, pady=5, sticky="nsew")
 
         # 視窗狀態
-        window_frame = ttk.Frame(right_panel)
+        window_frame = ttk.LabelFrame(right_panel, text="視窗控制", padding=5)
         window_frame.grid(row=0, column=0, sticky="ew", padx=5, pady=5)
 
-        self.window_status = ttk.Label(window_frame, text="視窗狀態: 尋找中...")
+        # 自定義視窗名稱輸入
+        name_frame = ttk.Frame(window_frame)
+        name_frame.pack(fill=tk.X, pady=(0, 5))
+        
+        ttk.Label(name_frame, text="視窗關鍵字:").pack(side=tk.LEFT)
+        self.window_keywords = tk.StringVar(value="MapleStory,幽靈谷")
+        keywords_entry = ttk.Entry(name_frame, textvariable=self.window_keywords, width=25)
+        keywords_entry.pack(side=tk.LEFT, padx=(5, 0), fill=tk.X, expand=True)
+        
+        # 說明文字
+        ttk.Label(window_frame, text="提示: 使用逗號分隔多個關鍵字", font=("Arial", 8)).pack(anchor="w")
+
+        # 視窗狀態和按鈕
+        status_frame = ttk.Frame(window_frame)
+        status_frame.pack(fill=tk.X, pady=(5, 0))
+        
+        self.window_status = ttk.Label(status_frame, text="視窗狀態: 尋找中...")
         self.window_status.pack(side=tk.LEFT)
-        ttk.Button(window_frame, text="重新檢測", command=self.refresh_window).pack(side=tk.LEFT, padx=5)
+        ttk.Button(status_frame, text="重新檢測", command=self.refresh_window).pack(side=tk.RIGHT, padx=(5, 0))
 
         # 位置資訊
         self.position_label = ttk.Label(right_panel, text="角色位置: 未偵測")
@@ -241,7 +257,7 @@ class MacroApp:
 
         # 整合小地圖輔助控件與監控控件
         self.minimap_display_frame = ttk.LabelFrame(right_panel, text="小地圖輔助與監控", padding=5)
-        self.minimap_display_frame.grid(row=4, column=0, padx=5, pady=5, sticky="ew")
+        self.minimap_display_frame.grid(row=5, column=0, padx=5, pady=5, sticky="ew")
 
         # 創建小地圖畫布
         self.minimap_canvas = tk.Canvas(self.minimap_display_frame, width=150, height=150, bg='black')
@@ -282,16 +298,185 @@ class MacroApp:
         self.position_check_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(playback_frame, text="位置驗證", variable=self.position_check_var).grid(row=3, column=0, columnspan=2)
 
+        # 自動修正設置
+        correction_frame = ttk.LabelFrame(left_panel, text="自動修正設置", padding=5)
+        correction_frame.grid(row=3, column=0, padx=5, pady=5, sticky="ew")
+
+        # 修正閾值設置
+        ttk.Label(correction_frame, text="偏離修正閾值(px):").grid(row=0, column=0, sticky="w")
+        self.correction_threshold = tk.StringVar(value="15")
+        threshold_entry = ttk.Entry(correction_frame, textvariable=self.correction_threshold, width=8)
+        threshold_entry.grid(row=0, column=1, padx=5)
+
+        # 最大修正次數
+        ttk.Label(correction_frame, text="最大修正次數:").grid(row=1, column=0, sticky="w")
+        self.max_corrections = tk.StringVar(value="3")
+        max_corr_entry = ttk.Entry(correction_frame, textvariable=self.max_corrections, width=8)
+        max_corr_entry.grid(row=1, column=1, padx=5)
+
+        # 垂直跳躍高度閾值
+        ttk.Label(correction_frame, text="垂直跳躍閾值(px):").grid(row=2, column=0, sticky="w")
+        self.vertical_jump_threshold = tk.StringVar(value="10")
+        vert_threshold_entry = ttk.Entry(correction_frame, textvariable=self.vertical_jump_threshold, width=8)
+        vert_threshold_entry.grid(row=2, column=1, padx=5)
+
+        # 按鍵設置
+        ttk.Label(correction_frame, text="水平二連跳:").grid(row=3, column=0, sticky="w")
+        self.horizontal_jump_key = tk.StringVar(value="space")
+        h_jump_entry = ttk.Entry(correction_frame, textvariable=self.horizontal_jump_key, width=8)
+        h_jump_entry.grid(row=3, column=1, padx=5)
+
+        ttk.Label(correction_frame, text="垂直二連跳:").grid(row=4, column=0, sticky="w")
+        self.vertical_jump_key = tk.StringVar(value="shift")
+        v_jump_entry = ttk.Entry(correction_frame, textvariable=self.vertical_jump_key, width=8)
+        v_jump_entry.grid(row=4, column=1, padx=5)
+
+        ttk.Label(correction_frame, text="瞬間移動:").grid(row=5, column=0, sticky="w")
+        self.teleport_key = tk.StringVar(value="x")
+        teleport_entry = ttk.Entry(correction_frame, textvariable=self.teleport_key, width=8)
+        teleport_entry.grid(row=5, column=1, padx=5)
+
+        ttk.Label(correction_frame, text="下跳:").grid(row=6, column=0, sticky="w")
+        self.down_jump_key = tk.StringVar(value="down+alt")
+        down_jump_entry = ttk.Entry(correction_frame, textvariable=self.down_jump_key, width=12)
+        down_jump_entry.grid(row=6, column=1, padx=5)
+
         # 設定框架權重
         self.main_frame.grid_columnconfigure(1, weight=1)
         self.main_frame.grid_rowconfigure(0, weight=1)
+
+        # 初始化修正計數器
+        self.correction_attempts = 0
+
+    def perform_auto_correction(self, current_x, current_y, expected_x, expected_y):
+        """執行自動位置修正"""
+        try:
+            threshold = float(self.correction_threshold.get())
+            max_corrections = int(self.max_corrections.get())
+            vertical_threshold = float(self.vertical_jump_threshold.get())
+            
+            # 檢查是否已經超過最大修正次數
+            if self.correction_attempts >= max_corrections:
+                print(f"❌ 已達最大修正次數 ({max_corrections})，停止自動修正")
+                return False
+            
+            x_diff = abs(current_x - expected_x)
+            y_diff = abs(current_y - expected_y)
+            
+            # 檢查是否需要修正
+            if x_diff < threshold and y_diff < threshold:
+                print("✅ 位置已在允許範圍內，無需修正")
+                self.correction_attempts = 0  # 重置計數器
+                return True
+            
+            self.correction_attempts += 1
+            print(f"🔧 開始第 {self.correction_attempts} 次自動位置修正")
+            print(f"   目標位置: ({expected_x:.1f}, {expected_y:.1f})")
+            print(f"   當前位置: ({current_x:.1f}, {current_y:.1f})")
+            print(f"   偏差: X={x_diff:.1f}px, Y={y_diff:.1f}px")
+            
+            # 決定修正策略
+            if y_diff > vertical_threshold:
+                if current_y > expected_y:
+                    # 需要向上移動 - 使用垂直二連跳
+                    print(f"⬆️ 執行垂直二連跳 (高度差: {y_diff:.1f}px)")
+                    self.execute_correction_move(self.vertical_jump_key.get(), 2)
+                else:
+                    # 需要向下移動 - 使用下跳
+                    print(f"⬇️ 執行下跳 (高度差: {y_diff:.1f}px)")
+                    self.execute_correction_move(self.down_jump_key.get(), 1)
+            
+            # 水平位置修正
+            if x_diff > threshold:
+                if current_x < expected_x:
+                    # 需要向右移動
+                    print(f"➡️ 向右移動 (距離: {x_diff:.1f}px)")
+                    self.execute_horizontal_correction("right", x_diff)
+                else:
+                    # 需要向左移動
+                    print(f"⬅️ 向左移動 (距離: {x_diff:.1f}px)")
+                    self.execute_horizontal_correction("left", x_diff)
+            
+            # 如果距離太遠，使用瞬間移動
+            total_distance = (x_diff**2 + y_diff**2)**0.5
+            if total_distance > threshold * 3:
+                print(f"🌟 距離太遠 ({total_distance:.1f}px)，嘗試瞬間移動")
+                self.execute_correction_move(self.teleport_key.get(), 1)
+            
+            # 短暫等待讓動作完成
+            time.sleep(0.5)
+            return True
+            
+        except Exception as e:
+            print(f"❌ 自動修正執行錯誤: {e}")
+            return False
+
+    def execute_correction_move(self, key, count):
+        """執行修正動作"""
+        try:
+            for i in range(count):
+                # 檢查是否為組合鍵
+                if '+' in key:
+                    # 處理組合鍵 (例如: "down+space")
+                    keys = key.split('+')
+                    print(f"🎮 執行組合鍵: {' + '.join(keys)}")
+                    
+                    # 同時按下所有按鍵
+                    for k in keys:
+                        pydirectinput.keyDown(k.strip())
+                        time.sleep(0.02)
+                    
+                    time.sleep(0.1)  # 保持按住狀態
+                    
+                    # 按相反順序釋放按鍵
+                    for k in reversed(keys):
+                        pydirectinput.keyUp(k.strip())
+                        time.sleep(0.02)
+                else:
+                    # 單一按鍵
+                    pydirectinput.press(key)
+                
+                time.sleep(0.1)
+        except Exception as e:
+            print(f"❌ 修正動作執行錯誤: {e}")
+
+    def execute_horizontal_correction(self, direction, distance):
+        """執行水平修正"""
+        try:
+            # 根據距離決定使用水平二連跳還是普通移動
+            if distance > float(self.correction_threshold.get()) * 1.5:
+                # 距離較遠，使用水平二連跳
+                print(f"🔄 使用水平二連跳進行 {direction} 移動")
+                pydirectinput.keyDown(direction)
+                time.sleep(0.1)
+                pydirectinput.press(self.horizontal_jump_key.get())
+                time.sleep(0.1)
+                pydirectinput.press(self.horizontal_jump_key.get())
+                time.sleep(0.1)
+                pydirectinput.keyUp(direction)
+            else:
+                # 距離較近，普通移動
+                print(f"👟 使用普通移動進行 {direction} 移動")
+                pydirectinput.keyDown(direction)
+                move_time = min(distance / 100, 0.5)  # 根據距離調整移動時間
+                time.sleep(move_time)
+                pydirectinput.keyUp(direction)
+        except Exception as e:
+            print(f"❌ 水平修正執行錯誤: {e}")
 
     def find_maple_window(self):
         def callback(hwnd, windows):
             if win32gui.IsWindowVisible(hwnd):
                 title = win32gui.GetWindowText(hwnd)
+                # 獲取用戶輸入的關鍵字
+                keywords_text = self.window_keywords.get().strip()
+                if not keywords_text:
+                    keywords = ["MapleStory", "幽靈谷"]  # 預設關鍵字
+                else:
+                    keywords = [k.strip() for k in keywords_text.split(',') if k.strip()]
+                
                 # 檢測包含指定關鍵字的視窗，並過濾掉非遊戲視窗
-                if any(keyword in title for keyword in ["MapleStory", "楓之谷"]):
+                if any(keyword in title for keyword in keywords):
                     try:
                         class_name = win32gui.GetClassName(hwnd)
                         # 排除 Discord、Chrome 等非遊戲視窗
@@ -816,8 +1001,25 @@ class MacroApp:
                                             print(f"   預期 X={expected_x:.1f}, Y={expected_y:.1f}, 實際 X={current_x:.1f}, Y={current_y:.1f}")
                                             print(f"   偏差量: X={x_diff:.1f}, Y={y_diff:.1f} - 暫停腳本進行修正")
                                             
-                                            # 暫停腳本進行位置修正
-                                            self.pause_for_correction(current_x, current_y, expected_x, expected_y, x_diff, y_diff)
+                                            # 檢查是否啟用自動修正
+                                            auto_correction_threshold = float(self.correction_threshold.get()) if self.correction_threshold.get().replace('.', '').isdigit() else 30
+                                            
+                                            if x_diff >= auto_correction_threshold or y_diff >= auto_correction_threshold:
+                                                print(f"🤖 啟動自動位置修正 (閾值: {auto_correction_threshold}px)")
+                                                
+                                                # 嘗試自動修正
+                                                if self.perform_auto_correction(current_x, current_y, expected_x, expected_y):
+                                                    print("✅ 自動修正完成，繼續執行")
+                                                    # 重置偏離追蹤
+                                                    self.deviation_start_time = None
+                                                    self.is_currently_deviating = False
+                                                else:
+                                                    print("❌ 自動修正失敗，使用手動修正")
+                                                    # 如果自動修正失敗，使用原來的暫停修正機制
+                                                    self.pause_for_correction(current_x, current_y, expected_x, expected_y, x_diff, y_diff)
+                                            else:
+                                                # 偏差在自動修正閾值內，使用原來的暫停修正機制
+                                                self.pause_for_correction(current_x, current_y, expected_x, expected_y, x_diff, y_diff)
                                             
                                         else:
                                             # 偏離但未達到修正條件
@@ -2199,4 +2401,3 @@ if __name__ == "__main__":
         print(f"❌ 啟動失敗: {e}")
         import traceback
         traceback.print_exc()
-
