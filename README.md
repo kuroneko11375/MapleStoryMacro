@@ -66,6 +66,7 @@ pip install keyboard pydirectinput pyautogui pyperclip opencv-python numpy pillo
 2025/10/01
 - 修正錄製問題
 - 修正連發時長、觸發問題
+- 新增部分自訂義功能
 
 ---
 
