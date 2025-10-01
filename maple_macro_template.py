@@ -125,11 +125,11 @@ class MacroApp:
         # 尋找遊戲視窗
         self.find_maple_window()
 
-        # 自動啟用小地圖功能
+        # 自動啟用小地圖功能 (在UI元件創建完成後)
         self.auto_setup_minimap()
 
-        # 排程更新位置
-        self.update_position()
+        # 延遲啟動位置更新，確保所有UI元件都已初始化
+        self.root.after(1000, self.update_position)
 
         print("MacroApp 初始化完成")
 
@@ -142,7 +142,8 @@ class MacroApp:
                 region = config.get('region')
                 if region and len(region) == 4:
                     self.minimap_region = tuple(region)
-                    if hasattr(self, 'minimap_status'):
+                    # 安全地更新UI元件
+                    if hasattr(self, 'minimap_status') and self.minimap_status.winfo_exists():
                         self.minimap_status.config(text=f"小地圖: 已載入 {region[2]}x{region[3]}")
                     print(f"🔁 已載入小地圖區域: {self.minimap_region}")
                 # 人物模板暫不持久化（可日後擴充）
@@ -288,7 +289,7 @@ class MacroApp:
             if win32gui.IsWindowVisible(hwnd):
                 title = win32gui.GetWindowText(hwnd)
                 # 檢測包含指定關鍵字的視窗
-                if any(keyword in title for keyword in ["楓之谷"]):
+                if any(keyword in title for keyword in ["幽靈谷"]):
                     try:
                         class_name = win32gui.GetClassName(hwnd)
                         if class_name and class_name not in ["Shell_TrayWnd", "Button"]:
@@ -378,6 +379,11 @@ class MacroApp:
 
     def update_position(self):
         """定期更新角色位置(小地圖)"""
+        # 確保UI元件已經創建
+        if not hasattr(self, 'position_label'):
+            self.root.after(300, self.update_position)
+            return
+            
         x, y = self.get_current_position()
         if x is not None and y is not None:
             self.position_label.config(text=f"角色位置(小地圖): X={x:.0f}, Y={y:.0f}", foreground="green")
@@ -441,6 +447,7 @@ class MacroApp:
                 current_state = set()
                 current_time = time.perf_counter()
                 
+                # 修復小鍵盤按鍵名稱，使用正確的 keyboard 庫格式
                 monitored_keys = [
                     # 方向鍵
                     'left', 'right', 'up', 'down',
@@ -456,41 +463,49 @@ class MacroApp:
                     '-', '=', '[', ']', '\\', ';', "'", ',', '.', '/', '`',
                     # 功能鍵
                     'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8', 'f9', 'f10', 'f11', 'f12',
-                    # 小鍵盤
-                    'num 0', 'num 1', 'num 2', 'num 3', 'num 4', 'num 5', 'num 6', 'num 7', 'num 8', 'num 9',
-                    'num /', 'num *', 'num -', 'num +', 'num .', 'num enter', 'num lock',
+                    # 小鍵盤 - 使用正確的 keyboard 庫格式
+                    'keypad 0', 'keypad 1', 'keypad 2', 'keypad 3', 'keypad 4', 
+                    'keypad 5', 'keypad 6', 'keypad 7', 'keypad 8', 'keypad 9',
+                    'keypad /', 'keypad *', 'keypad -', 'keypad +', 'keypad .', 'keypad enter',
+                    'num lock',
                     # 滑鼠按鍵 (如果需要的話)
                     # 'left click', 'right click', 'middle click'
                 ]
                 
                 for key in monitored_keys:
-                    if keyboard.is_pressed(key):
-                        current_state.add(key)
-                        # 檢查是否需要產生持續按住事件
-                        if key in last_state:
-                            last_press_time = key_press_times.get(key, 0)
-                            if current_time - last_press_time >= continuous_press_interval:
-                                # 更新按鍵時間戳
+                    try:
+                        if keyboard.is_pressed(key):
+                            current_state.add(key)
+                            # 檢查是否需要產生持續按住事件
+                            if key in last_state:
+                                last_press_time = key_press_times.get(key, 0)
+                                if current_time - last_press_time >= continuous_press_interval:
+                                    # 更新按鍵時間戳
+                                    key_press_times[key] = current_time
+                                    # 產生持續按住事件
+                                    if last_event_time is not None:
+                                        time_diff = current_time - last_event_time
+                                        relative_time = self.current_recorded_events[-1]['time'] + time_diff if self.current_recorded_events else time_diff
+                                    current_x, current_y = self.get_current_position()
+                                    event_data = {
+                                        'type': 'keyboard',
+                                        'event': key,
+                                        'event_type': 'hold',  # 新增的持續按住事件類型
+                                        'time': round(relative_time, 3),
+                                        'pressed_keys': list(current_state),
+                                        'position': {'x': current_x, 'y': current_y} if current_x is not None else None
+                                    }
+                                    self.current_recorded_events.append(event_data)
+                                    print(f"🔄 錄製持續按住 {key}")
+                                    last_event_time = current_time
+                            else:
+                                # 新按下的按鍵，記錄時間戳
                                 key_press_times[key] = current_time
-                                # 產生持續按住事件
-                                if last_event_time is not None:
-                                    time_diff = current_time - last_event_time
-                                    relative_time = self.current_recorded_events[-1]['time'] + time_diff if self.current_recorded_events else time_diff
-                                current_x, current_y = self.get_current_position()
-                                event_data = {
-                                    'type': 'keyboard',
-                                    'event': key,
-                                    'event_type': 'hold',  # 新增的持續按住事件類型
-                                    'time': round(relative_time, 3),
-                                    'pressed_keys': list(current_state),
-                                    'position': {'x': current_x, 'y': current_y} if current_x is not None else None
-                                }
-                                self.current_recorded_events.append(event_data)
-                                print(f"🔄 錄製持續按住 {key}")
-                                last_event_time = current_time
-                        else:
-                            # 新按下的按鍵，記錄時間戳
-                            key_press_times[key] = current_time
+                    except Exception as e:
+                        # 忽略無法識別的按鍵
+                        if 'not mapped' not in str(e):
+                            print(f"⚠️ 按鍵檢測錯誤 {key}: {e}")
+                        continue
 
                 if current_state != last_state:
                     if last_event_time is None:
@@ -556,7 +571,7 @@ class MacroApp:
                     last_state = current_state.copy()
                     
                     self.events = self.current_recorded_events
-                
+            
                 if self.recording:
                     self.root.after(int(check_interval * 1000), check_keys)
             
@@ -1918,10 +1933,13 @@ if __name__ == "__main__":
 
         # 強制將 GUI 視窗置於最前方
         print("設定視窗置頂...")
-        root.attributes('-topmost', True)
-        root.update()
-        root.attributes('-topmost', False)
-        print("✓ 視窗置頂設定完成")
+        try:
+            root.attributes('-topmost', True)
+            root.update()
+            root.attributes('-topmost', False)
+            print("✓ 視窗置頂設定完成")
+        except Exception as e:
+            print(f"⚠️ 視窗置頂設定失敗: {e}")
 
         print("🚀 宏工具已啟動 - 若視窗未顯示在最前，可手動切換")
         print("進入 Tkinter 主迴圈...")
