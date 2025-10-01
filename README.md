@@ -63,6 +63,10 @@ pip install keyboard pydirectinput pyautogui pyperclip opencv-python numpy pillo
 - **回程指令**：修改 `return_to_town` 方法內 `pyperclip.copy('@FM')` → 你常用的回城指令，例如 `@回城`。  
 
 ---
+2025/10/01
+修正錄製問題
+
+---
 
 ## 重要聲明
 
