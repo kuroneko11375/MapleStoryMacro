@@ -291,7 +291,7 @@ class MacroApp:
             if win32gui.IsWindowVisible(hwnd):
                 title = win32gui.GetWindowText(hwnd)
                 # 檢測包含指定關鍵字的視窗，並過濾掉非遊戲視窗
-                if any(keyword in title for keyword in ["MapleStory", "幽靈谷"]):
+                if any(keyword in title for keyword in ["MapleStory", "楓之谷"]):
                     try:
                         class_name = win32gui.GetClassName(hwnd)
                         # 排除 Discord、Chrome 等非遊戲視窗
@@ -2199,3 +2199,4 @@ if __name__ == "__main__":
         print(f"❌ 啟動失敗: {e}")
         import traceback
         traceback.print_exc()
+
