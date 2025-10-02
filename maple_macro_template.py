@@ -411,8 +411,8 @@ class MacroApp:
             total_distance = (x_diff**2 + y_diff**2)**0.5
             if (self.enable_teleport.get() and 
                 total_distance > threshold * 3):
-                print(f"🌟 距離太遠 ({total_distance:.1f}px)，嘗試瞬間移動")
-                self.execute_correction_move(self.teleport_key.get(), 1)
+                print(f"🌟 距離太遠 ({total_distance:.1f}px)，嘗試定向瞬間移動")
+                self.execute_directional_teleport(current_x, current_y, expected_x, expected_y)
             elif total_distance > threshold * 3:
                 print(f"⚠️ 距離太遠 ({total_distance:.1f}px)，但瞬間移動已關閉")
             
@@ -423,6 +423,56 @@ class MacroApp:
         except Exception as e:
             print(f"❌ 自動修正執行錯誤: {e}")
             return False
+
+    def execute_directional_teleport(self, current_x, current_y, expected_x, expected_y):
+        """執行定向瞬間移動"""
+        try:
+            x_diff = expected_x - current_x
+            y_diff = expected_y - current_y
+            
+            # 決定主要移動方向
+            if abs(x_diff) > abs(y_diff):
+                # 水平移動為主
+                if x_diff > 0:
+                    direction = "right"
+                    print(f"🌟 向右瞬移 (X偏差: {x_diff:.1f}px)")
+                else:
+                    direction = "left"
+                    print(f"🌟 向左瞬移 (X偏差: {x_diff:.1f}px)")
+            else:
+                # 垂直移動為主
+                if y_diff < 0:
+                    direction = "up"
+                    print(f"🌟 向上瞬移 (Y偏差: {y_diff:.1f}px)")
+                else:
+                    direction = "down"
+                    print(f"🌟 向下瞬移 (Y偏差: {y_diff:.1f}px)")
+            
+            # 執行定向瞬移：按住方向鍵 + 瞬移技能
+            teleport_key = self.teleport_key.get()
+            
+            # 檢查瞬移鍵是否已經是組合鍵
+            if '+' in teleport_key:
+                # 如果已經是組合鍵，直接使用
+                print(f"🎮 執行組合瞬移: {teleport_key}")
+                self.execute_correction_move(teleport_key, 1)
+            else:
+                # 如果是單一按鍵，與方向鍵組合
+                print(f"🎮 執行定向瞬移: {direction} + {teleport_key}")
+                
+                # 按住方向鍵
+                pydirectinput.keyDown(direction)
+                time.sleep(0.05)
+                
+                # 執行瞬移
+                pydirectinput.press(teleport_key)
+                time.sleep(0.1)
+                
+                # 釋放方向鍵
+                pydirectinput.keyUp(direction)
+                
+        except Exception as e:
+            print(f"❌ 定向瞬移執行錯誤: {e}")
 
     def execute_correction_move(self, key, count):
         """執行修正動作"""
@@ -665,14 +715,14 @@ class MacroApp:
                 current_state = set()
                 current_time = time.perf_counter()
                 
-                # 檢查當前活動窗口是否是遊戲窗口
+                # 檢查當前活動窗口是否是遊戲窗口 - 減少日誌頻率
                 try:
                     current_hwnd = win32gui.GetForegroundWindow()
                     if current_hwnd != self.hooked_hwnd:
-                        # 如果不是遊戲窗口，跳過這次檢查
+                        # 如果不是遊戲窗口，跳過這次檢查（靜默跳過，避免日誌洪流）
                         return
                 except:
-                    # 如果檢查失敗，繼續錄制
+                    # 如果檢查失敗，繼續錄制（靜默處理）
                     pass
                 
                 # 修復小鍵盤按鍵名稱，使用正確的 keyboard 庫格式
@@ -685,9 +735,7 @@ class MacroApp:
                     # 完整字母表
                     'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
                     'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
-                    # 數字鍵
-                    '1', '2', '3', '4', '5', '6', '7', '8', '9', '0',
-                    # 符號鍵
+                    # 符號鍵 (移除數字鍵以避免誤觸)
                     '-', '=', '[', ']', '\\', ';', "'", ',', '.', '/', '`',
                     # 功能鍵
                     'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8', 'f9', 'f10', 'f11', 'f12',
@@ -1056,17 +1104,23 @@ class MacroApp:
                             
                             # 處理持續按住事件
                             if event['event_type'] == 'hold':
-                                # 執行快速連發來模擬持續按住
                                 current_key = event['event']
                                 try:
-                                    print(f"🔄 執行hold連發: {current_key}")
-                                    # 減少連發次數，讓效果更接近實際按住
-                                    for i in range(2):  # 從3次改為2次
-                                        pydirectinput.keyDown(current_key)
-                                        time.sleep(0.005)
-                                        pydirectinput.keyUp(current_key)
-                                        time.sleep(0.015)
-                                    print(f"⚡ Hold連發完成: {current_key} (2次)")
+                                    # 檢查是否為方向鍵
+                                    direction_keys = ['left', 'right', 'up', 'down']
+                                    if current_key in direction_keys:
+                                        # 方向鍵使用持續按住
+                                        print(f"� 持續按住方向鍵: {current_key}")
+                                        continue
+                                    else:
+                                        # 非方向鍵使用連發
+                                        print(f"🔄 執行hold連發: {current_key}")
+                                        for i in range(2):
+                                            pydirectinput.keyDown(current_key)
+                                            time.sleep(0.005)
+                                            pydirectinput.keyUp(current_key)
+                                            time.sleep(0.015)
+                                        print(f"⚡ Hold連發完成: {current_key} (2次)")
                                 except Exception as e:
                                     print(f"❌ Hold事件執行錯誤: {e}")
                                 continue
@@ -1110,24 +1164,20 @@ class MacroApp:
                                 'p': 'p', 'q': 'q', 'r': 'r', 's': 's', 't': 't',
                                 'u': 'u', 'v': 'v', 'w': 'w', 'x': 'x', 'y': 'y', 'z': 'z',
                                 
-                                # 數字鍵
-                                '1': '1', '2': '2', '3': '3', '4': '4', '5': '5',
-                                '6': '6', '7': '7', '8': '8', '9': '9', '0': '0',
-                                
                                 # 符號鍵
                                 '-': '-', '=': '=', '[': '[', ']': ']', '\\': '\\',
                                 ';': ';', "'": "'", ',': ',', '.': '.', '/': '/',
                                 '`': '`',
                                 
-                                # 小鍵盤
+                                # 主鍵盤數字鍵 (保留為技能鍵)
+                                '1': '1', '2': '2', '3': '3', '4': '4', '5': '5',
+                                '6': '6', '7': '7', '8': '8', '9': '9', '0': '0',
+                                
+                                # 小鍵盤功能鍵 (不含數字鍵)
                                 'num lock': 'numlock',
-                                'num 0': 'num0', 'num 1': 'num1', 'num 2': 'num2',
-                                'num 3': 'num3', 'num 4': 'num4', 'num 5': 'num5',
-                                'num 6': 'num6', 'num 7': 'num7', 'num 8': 'num8',
-                                'num 9': 'num9',
-                                'num /': 'divide', 'num *': 'multiply',
-                                'num -': 'subtract', 'num +': 'add',
-                                'num .': 'decimal', 'num enter': 'enter'
+                                'keypad /': 'divide', 'keypad *': 'multiply',
+                                'keypad -': 'subtract', 'keypad +': 'add',
+                                'keypad .': 'decimal', 'keypad enter': 'enter'
                             }
                             
                             current_key = key_mapping.get(event['event'], event['event'])
@@ -1136,10 +1186,6 @@ class MacroApp:
                             # 調試：顯示原始按鍵和映射後的按鍵
                             if event['event'] in ['left', 'right', 'up', 'down'] or current_key in ['left', 'right', 'up', 'down']:
                                 print(f"🎯 方向鍵調試: 原始='{event['event']}' -> 映射='{current_key}'")
-                            
-                            # 如果是數字鍵卻被當作方向鍵，輸出警告
-                            if event['event'] in ['1', '2', '3', '4', '5', '6'] and current_key in ['left', 'right', 'up', 'down']:
-                                print(f"⚠️ 警告: 數字鍵 '{event['event']}' 被錯誤映射為方向鍵 '{current_key}'")
                             
                             if event['event_type'] == 'down':
                                 # 若本迴圈被標記抑制跳躍且當前為 space，直接跳過
@@ -1150,7 +1196,7 @@ class MacroApp:
                                     if current_key in ['left', 'right', 'up', 'down']:
                                         print(f"🎮 執行方向鍵: {current_key}")
                                     elif current_key in ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']:
-                                        print(f"🔢 執行數字鍵: {current_key}")
+                                        print(f"🔢 執行主鍵盤數字鍵: {current_key}")
                                     
                                     # 確保按鍵沒有重複按下
                                     if current_key not in currently_pressed_keys:
@@ -1171,20 +1217,23 @@ class MacroApp:
                                                     except Exception:
                                                         pass
                             elif event['event_type'] == 'hold':
-                                # 處理持續按住事件 - 使用有效的快速連發
-                                if self.suppress_space_until_loop_end and current_key == 'space':
+                                # 處理持續按住事件
+                                # 檢查是否為方向鍵
+                                direction_keys = ['left', 'right', 'up', 'down']
+                                if current_key in direction_keys:
+                                    # 方向鍵完全忽略 hold 事件，只依賴 down/up
+                                    print(f"⏭️ 忽略方向鍵 hold 事件: {current_key}")
+                                elif self.suppress_space_until_loop_end and current_key == 'space':
                                     print("⏭️ 抑制 space (hold)")
                                 else:
                                     try:
+                                        # 非方向鍵使用連發
                                         print(f"🔄 執行連發: {current_key}")
-                                        
-                                        # 減少連發次數，讓效果更接近實際按住
-                                        for i in range(2):  # 從3次改為2次
+                                        for i in range(2):
                                             pydirectinput.keyDown(current_key)
                                             time.sleep(0.005)
                                             pydirectinput.keyUp(current_key)
                                             time.sleep(0.015)
-                                        
                                         print(f"⚡ 連發完成: {current_key} (2次)")
                                         
                                     except Exception as e:
