@@ -228,7 +228,7 @@ class MacroApp:
         name_frame.pack(fill=tk.X, pady=(0, 5))
         
         ttk.Label(name_frame, text="視窗關鍵字:").pack(side=tk.LEFT)
-        self.window_keywords = tk.StringVar(value="MapleStory,幽靈谷")
+        self.window_keywords = tk.StringVar(value="MapleStory,楓之谷")
         keywords_entry = ttk.Entry(name_frame, textvariable=self.window_keywords, width=25)
         keywords_entry.pack(side=tk.LEFT, padx=(5, 0), fill=tk.X, expand=True)
         
@@ -2401,3 +2401,4 @@ if __name__ == "__main__":
         print(f"❌ 啟動失敗: {e}")
         import traceback
         traceback.print_exc()
+
