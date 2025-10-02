@@ -16,9 +16,12 @@ import threading
 import keyboard
 import win32gui
 import win32con
+import win32api
 import pydirectinput
 import pyperclip
 import os
+import ctypes
+from ctypes import wintypes
 import cv2
 import numpy as np
 from PIL import Image, ImageTk
@@ -47,7 +50,75 @@ def run_as_admin():
             messagebox.showerror("權限錯誤", "需要管理員權限才能正常運行，請以管理員身分執行此程序")
             return False
 
+# Windows API 常數定義（保留給 Alt 鍵檢測使用）
+WM_KEYDOWN = 0x0100
+WM_KEYUP = 0x0101
+
+# 虛擬鍵碼對應表（保留給 Alt 鍵檢測使用）
+VK_CODE_MAP = {
+    'left': 0x25, 'up': 0x26, 'right': 0x27, 'down': 0x28, 'alt': 0x12
+}
+
 class MacroApp:
+    # 按鍵常數定義
+    MONITORED_KEYS = [
+        # 方向鍵
+        'left', 'right', 'up', 'down',
+        # 修飾鍵 - 增加更多 alt 變體
+        'space', 'alt', 'ctrl', 'shift', 'tab', 'enter', 'backspace', 'delete',
+        'left alt', 'right alt', 'menu', 'left menu', 'right menu', 'altgr', 'alt gr',
+        'left ctrl', 'right ctrl', 'control', 'left control', 'right control',
+        'insert', 'home', 'end', 'page up', 'page down', 'esc',
+        # 字母鍵
+        'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
+        'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+        # 主鍵盤數字鍵
+        '1', '2', '3', '4', '5', '6', '7', '8', '9', '0',
+        # 符號鍵
+        '-', '=', '[', ']', '\\', ';', "'", ',', '.', '/', '`',
+        # 功能鍵
+        'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8', 'f9', 'f10', 'f11', 'f12',
+        # 小鍵盤功能鍵
+        'keypad /', 'keypad *', 'keypad -', 'keypad +', 'keypad .', 'keypad enter',
+        'num lock',
+    ]
+    
+    KEY_MAPPING = {
+        # 修飾鍵 - 增加更多 alt/ctrl 變體
+        'space': 'space', 'shift': 'shiftleft', 'right shift': 'shiftright',
+        'ctrl': 'ctrlleft', 'right ctrl': 'ctrlright', 'alt': 'altleft', 'right alt': 'altright',
+        # 增加可能的 alt/ctrl 變體
+        'left ctrl': 'ctrlleft', 'left alt': 'altleft',
+        'control': 'ctrlleft', 'left control': 'ctrlleft', 'right control': 'ctrlright',
+        'menu': 'altleft', 'left menu': 'altleft', 'right menu': 'altright',
+        'alt gr': 'altright', 'altgr': 'altright',
+        # Windows 特有的 alt 檢測名稱
+        'windows': 'winleft', 'left windows': 'winleft', 'right windows': 'winright',
+        'cmd': 'winleft', 'win': 'winleft',
+        'enter': 'enter', 'tab': 'tab', 'backspace': 'backspace', 'delete': 'delete',
+        'insert': 'insert', 'home': 'home', 'end': 'end', 'page up': 'pageup',
+        'page down': 'pagedown', 'esc': 'esc',
+        # 功能鍵
+        'f1': 'f1', 'f2': 'f2', 'f3': 'f3', 'f4': 'f4', 'f5': 'f5', 'f6': 'f6',
+        'f7': 'f7', 'f8': 'f8', 'f9': 'f9', 'f10': 'f10', 'f11': 'f11', 'f12': 'f12',
+        # 方向鍵
+        'left': 'left', 'right': 'right', 'up': 'up', 'down': 'down',
+        'arrow left': 'left', 'arrow right': 'right', 'arrow up': 'up', 'arrow down': 'down',
+        'left arrow': 'left', 'right arrow': 'right', 'up arrow': 'up', 'down arrow': 'down',
+        # 字母鍵
+        **{chr(i): chr(i) for i in range(ord('a'), ord('z') + 1)},
+        # 數字鍵
+        **{str(i): str(i) for i in range(10)},
+        # 符號鍵
+        '-': '-', '=': '=', '[': '[', ']': ']', '\\': '\\',
+        ';': ';', "'": "'", ',': ',', '.': '.', '/': '/', '`': '`',
+        # 小鍵盤功能鍵
+        'num lock': 'numlock', 'keypad /': 'divide', 'keypad *': 'multiply',
+        'keypad -': 'subtract', 'keypad +': 'add', 'keypad .': 'decimal', 'keypad enter': 'enter'
+    }
+    
+    DIRECTION_KEYS = ['left', 'right', 'up', 'down']
+    
     def __init__(self, root):
         self.root = root
         self.root.title("Maple Macro GUI")
@@ -56,6 +127,17 @@ class MacroApp:
         
         # 初始化小地圖相關變數 (必須在最前面)
         self.minimap_var = tk.BooleanVar(value=False)  # 預設關閉小地圖
+        
+        # 小地圖設置狀態 - 只有用戶主動設置後才為 True
+        self.minimap_properly_set = False
+        
+        # 視窗狀態更新控制
+        self.last_window_check = 0
+        self.window_check_interval = 2.0  # 每2秒檢查一次視窗狀態
+        
+        # 視窗鎖定狀態追蹤（用於控制log輸出）
+        self.last_locked_hwnd = None
+        self.window_lock_logged = False
         
         # 初始化變數
         self.events = []
@@ -125,6 +207,9 @@ class MacroApp:
         self.create_widgets()
 
         print("控制元件建立完成")
+        
+        # 開始狀態監控
+        self.start_status_monitoring()
 
         # 尋找遊戲視窗
         self.find_maple_window()
@@ -146,13 +231,18 @@ class MacroApp:
                 region = config.get('region')
                 if region and len(region) == 4:
                     self.minimap_region = tuple(region)
+                    self.minimap_properly_set = True  # 從設定檔載入的也算已設定
                     # 安全地更新UI元件
                     if hasattr(self, 'minimap_status') and self.minimap_status.winfo_exists():
                         self.minimap_status.config(text=f"小地圖: 已載入 {region[2]}x{region[3]}")
                     print(f"🔁 已載入小地圖區域: {self.minimap_region}")
+                else:
+                    self.minimap_properly_set = False
+                    print("ℹ️ 小地圖區域資料無效")
                 # 人物模板暫不持久化（可日後擴充）
             else:
-                print("ℹ️ 沒有找到小地圖設定檔，跳過自動載入")
+                self.minimap_properly_set = False
+                print("ℹ️ 沒有找到小地圖設定檔，請手動設定小地圖")
         except Exception as e:
             print(f"❌ 自動載入小地圖設定失敗: {e}")
 
@@ -417,18 +507,18 @@ class MacroApp:
                     
                     # 同時按下所有按鍵
                     for k in keys:
-                        pydirectinput.keyDown(k.strip())
+                        self.send_key_input(k.strip(), 'down')
                         time.sleep(0.02)
                     
                     time.sleep(0.1)  # 保持按住狀態
                     
                     # 按相反順序釋放按鍵
                     for k in reversed(keys):
-                        pydirectinput.keyUp(k.strip())
+                        self.send_key_input(k.strip(), 'up')
                         time.sleep(0.02)
                 else:
                     # 單一按鍵
-                    pydirectinput.press(key)
+                    self.send_key_input(key, 'both')
                 
                 time.sleep(0.1)
         except Exception as e:
@@ -441,24 +531,43 @@ class MacroApp:
             if distance > float(self.correction_threshold.get()) * 1.5:
                 # 距離較遠，使用水平二連跳
                 print(f"🔄 使用水平二連跳進行 {direction} 移動")
-                pydirectinput.keyDown(direction)
+                self.send_key_input(direction, 'down')
                 time.sleep(0.1)
-                pydirectinput.press(self.horizontal_jump_key.get())
+                self.send_key_input(self.horizontal_jump_key.get(), 'both')
                 time.sleep(0.1)
-                pydirectinput.press(self.horizontal_jump_key.get())
+                self.send_key_input(self.horizontal_jump_key.get(), 'both')
                 time.sleep(0.1)
-                pydirectinput.keyUp(direction)
+                self.send_key_input(direction, 'up')
             else:
                 # 距離較近，普通移動
                 print(f"👟 使用普通移動進行 {direction} 移動")
-                pydirectinput.keyDown(direction)
+                self.send_key_input(direction, 'down')
                 move_time = min(distance / 100, 0.5)  # 根據距離調整移動時間
                 time.sleep(move_time)
-                pydirectinput.keyUp(direction)
+                self.send_key_input(direction, 'up')
         except Exception as e:
             print(f"❌ 水平修正執行錯誤: {e}")
 
-    def find_maple_window(self):
+    def _check_alt_keys_winapi(self):
+        """使用 Windows API 檢測 Alt 鍵"""
+        try:
+            user32 = ctypes.windll.user32
+            VK_LMENU = 0xA4  # 左 Alt
+            VK_RMENU = 0xA5  # 右 Alt
+            
+            left_alt = user32.GetAsyncKeyState(VK_LMENU) & 0x8000
+            right_alt = user32.GetAsyncKeyState(VK_RMENU) & 0x8000
+            
+            alt_keys = []
+            if left_alt:
+                alt_keys.append('alt')  # 統一使用 'alt' 作為左 Alt
+            if right_alt:
+                alt_keys.append('right alt')
+            
+            return alt_keys
+        except Exception as e:
+            print(f"⚠️ Alt 鍵 API 檢測錯誤: {e}")
+            return []
         def callback(hwnd, windows):
             if win32gui.IsWindowVisible(hwnd):
                 title = win32gui.GetWindowText(hwnd)
@@ -560,6 +669,137 @@ class MacroApp:
         self.window_status.config(state='disabled')
         threading.Thread(target=async_refresh, daemon=True).start()
     
+    def find_maple_window(self):
+        """自動尋找楓之谷遊戲視窗"""
+        def enum_windows_callback(hwnd, windows):
+            if win32gui.IsWindowVisible(hwnd):
+                title = win32gui.GetWindowText(hwnd)
+                class_name = win32gui.GetClassName(hwnd)
+                
+                # 楓之谷相關的視窗標題和類名模式
+                maple_patterns = [
+                    'MapleStory',
+                    'ThunderBolt',  # 閃雷電遊戲平台
+                    '楓之谷', '幽靈谷',
+                    'MapleStoryClass'  # 類名
+                ]
+                
+                # 檢查標題或類名是否包含楓之谷相關字詞
+                for pattern in maple_patterns:
+                    if pattern in title or pattern in class_name:
+                        windows.append((title, hwnd, class_name))
+                        break
+        
+        windows = []
+        win32gui.EnumWindows(enum_windows_callback, windows)
+        
+        if windows:
+            # 優先選擇主要的遊戲視窗
+            for title, hwnd, class_name in windows:
+                if 'MapleStoryClass' in class_name or any(keyword in title for keyword in ['楓之谷', '幽靈谷']):
+                    # 只有在視窗變化時才輸出log
+                    if self.last_locked_hwnd != hwnd:
+                        print(f"🎯 自動鎖定遊戲視窗 - 標題: {title}, 句柄: {hwnd}, 類名: {class_name}")
+                        self.last_locked_hwnd = hwnd
+                        self.window_lock_logged = True
+                    
+                    self.hooked_hwnd = hwnd
+                    status_text = f"視窗狀態: 已鎖定 ({title})"
+                    self.window_status.config(text=status_text)
+                    return True
+        
+        # 如果沒找到，清除鎖定狀態
+        if hasattr(self, 'hooked_hwnd') and self.hooked_hwnd:
+            # 只有在狀態變化時才輸出log
+            if self.window_lock_logged:
+                print("⚠️ 遊戲視窗遺失，等待重新連接...")
+                self.window_lock_logged = False
+            
+            self.hooked_hwnd = None
+            self.last_locked_hwnd = None
+            status_text = "視窗狀態: 找不到遊戲視窗"
+            self.window_status.config(text=status_text)
+        
+        return False
+    
+    def start_status_monitoring(self):
+        """開始狀態監控"""
+        self.update_window_status()
+        
+    def update_window_status(self):
+        """定期更新視窗狀態"""
+        current_time = time.time()
+        
+        # 每隔一定時間檢查視窗狀態
+        if current_time - self.last_window_check >= self.window_check_interval:
+            self.last_window_check = current_time
+            
+            # 檢查當前鎖定的視窗是否還存在
+            if hasattr(self, 'hooked_hwnd') and self.hooked_hwnd:
+                try:
+                    if win32gui.IsWindow(self.hooked_hwnd) and win32gui.IsWindowVisible(self.hooked_hwnd):
+                        title = win32gui.GetWindowText(self.hooked_hwnd)
+                        status_text = f"視窗狀態: 已鎖定 ({title})"
+                        if self.background_mode.get():
+                            status_text += " [背景模式]"
+                        self.window_status.config(text=status_text)
+                    else:
+                        # 視窗不存在了，重新尋找
+                        self.find_maple_window()
+                except:
+                    # 視窗句柄無效，重新尋找
+                    self.find_maple_window()
+            else:
+                # 沒有鎖定的視窗，嘗試自動尋找
+                self.find_maple_window()
+        
+        # 繼續監控
+        self.root.after(500, self.update_window_status)  # 每0.5秒檢查一次
+    
+
+    def send_key_input(self, key, action='both'):
+        """
+        統一的按鍵輸入方法 - 使用全域輸入
+        
+        Args:
+            key: 按鍵名稱
+            action: 'down', 'up', 或 'both'
+        """
+        try:
+            # 使用全域輸入（pydirectinput）
+            if action == 'down':
+                pydirectinput.keyDown(key)
+            elif action == 'up':
+                pydirectinput.keyUp(key)
+            else:  # both
+                pydirectinput.press(key)
+            return True
+                
+        except Exception as e:
+            print(f"❌ 按鍵輸入失敗: {e}")
+            return False
+
+    def _check_alt_keys_winapi(self):
+        """使用 Windows API 檢測 Alt 鍵"""
+        try:
+            user32 = ctypes.windll.user32
+            VK_LMENU = 0xA4  # 左 Alt
+            VK_RMENU = 0xA5  # 右 Alt
+            
+            left_alt = user32.GetAsyncKeyState(VK_LMENU) & 0x8000
+            right_alt = user32.GetAsyncKeyState(VK_RMENU) & 0x8000
+            
+            alt_keys = []
+            if left_alt:
+                alt_keys.append('alt')  # 統一使用 'alt' 作為左 Alt
+            if right_alt:
+                alt_keys.append('right alt')
+            
+            return alt_keys
+        except Exception as e:
+            print(f"⚠️ Alt 鍵 API 檢測錯誤: {e}")
+            return []
+
     # ====== 以小地圖追蹤替代記憶體讀取 ======
     def get_current_position(self):
         """取得目前角色位置(以小地圖像素座標表示)"""
@@ -640,6 +880,8 @@ class MacroApp:
             
             print("🎯 開始錄製 - 請在遊戲窗口中操作")
             print("⚠️ 注意：請避免在錄製期間點擊本程序界面")
+            print(f"🔍 監控的按鍵列表: {len(self.MONITORED_KEYS)} 個按鍵")
+            print(f"📊 錄製參數: 檢查間隔={check_interval}s, 連續按壓間隔={continuous_press_interval}s")
             
             def check_keys():
                 nonlocal last_state, relative_time, last_event_time
@@ -656,26 +898,8 @@ class MacroApp:
                     # 如果檢查失敗，繼續錄制（靜默處理）
                     pass
                 
-                # 修復小鍵盤按鍵名稱，使用正確的 keyboard 庫格式
-                monitored_keys = [
-                    # 方向鍵
-                    'left', 'right', 'up', 'down',
-                    # 修飾鍵
-                    'space', 'alt', 'ctrl', 'shift', 'tab', 'enter', 'backspace', 'delete',
-                    'insert', 'home', 'end', 'page up', 'page down', 'esc',
-                    # 完整字母表
-                    'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
-                    'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
-                    # 符號鍵 (移除數字鍵以避免誤觸)
-                    '-', '=', '[', ']', '\\', ';', "'", ',', '.', '/', '`',
-                    # 功能鍵
-                    'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8', 'f9', 'f10', 'f11', 'f12',
-                    # 小鍵盤 - 使用正確的 keyboard 庫格式
-                    'keypad 0', 'keypad 1', 'keypad 2', 'keypad 3', 'keypad 4', 
-                    'keypad 5', 'keypad 6', 'keypad 7', 'keypad 8', 'keypad 9',
-                    'keypad /', 'keypad *', 'keypad -', 'keypad +', 'keypad .', 'keypad enter',
-                    'num lock',
-                ]
+                # 使用類常數的監控按鍵列表
+                monitored_keys = self.MONITORED_KEYS
                 
                 # 檢測目前按下的按鍵
                 for key in monitored_keys:
@@ -685,6 +909,44 @@ class MacroApp:
                     except Exception as e:
                         if 'not mapped' not in str(e):
                             print(f"⚠️ 按鍵檢測錯誤 {key}: {e}")
+                        continue
+                
+                # 使用 Windows API 檢測 Alt 鍵（解決 keyboard 庫無法檢測 Alt 的問題）
+                api_alt_keys = self._check_alt_keys_winapi()
+                for alt_key in api_alt_keys:
+                    if alt_key not in current_state:
+                        current_state.add(alt_key)
+                        print(f"🔍 API檢測到 Alt 鍵: {alt_key}")
+                
+                # 處理方向鍵和數字鍵的衝突（NumLock關閉時）
+                # 如果同時檢測到方向鍵和對應的數字鍵，優先保留方向鍵
+                direction_number_conflicts = [
+                    ('left', '4'),
+                    ('right', '6'), 
+                    ('up', '8'),
+                    ('down', '2')
+                ]
+                
+                for direction, number in direction_number_conflicts:
+                    if direction in current_state and number in current_state:
+                        print(f"🔧 解決按鍵衝突: 移除數字鍵 '{number}'，保留方向鍵 '{direction}'")
+                        current_state.remove(number)
+                
+                # 額外檢查可能的小鍵盤方向鍵（NumLock關閉時）
+                keypad_direction_map = {
+                    'keypad 2': 'down',
+                    'keypad 4': 'left', 
+                    'keypad 6': 'right',
+                    'keypad 8': 'up'
+                }
+                
+                for keypad_key, direction_key in keypad_direction_map.items():
+                    try:
+                        if keyboard.is_pressed(keypad_key):
+                            print(f"🔍 檢測到小鍵盤方向鍵: {keypad_key} -> 轉換為 {direction_key}")
+                            current_state.add(direction_key)  # 轉換為標準方向鍵
+                            current_state.discard(keypad_key)  # 移除小鍵盤按鍵
+                    except Exception:
                         continue
                 
                 # 處理持續按住的按鍵
@@ -736,8 +998,17 @@ class MacroApp:
                     new_released = last_state - current_state
                     
                     for key in new_pressed:
-                        # 獲取當前位置
-                        current_x, current_y = self.get_current_position()
+                        # 獲取當前位置（如果有設定小地圖）
+                        current_x, current_y = None, None
+                        if hasattr(self, 'minimap_region') and self.minimap_region:
+                            try:
+                                current_x, current_y = self.get_current_position()
+                            except Exception as e:
+                                print(f"位置檢測錯誤: {e}")
+                        
+                        # 調試 alt/ctrl 按鍵檢測
+                        if 'alt' in key.lower() or 'ctrl' in key.lower() or 'menu' in key.lower():
+                            print(f"🔧 檢測到修飾鍵: '{key}' (類型: {type(key)})")
                         
                         event_data = {
                             'type': 'keyboard',
@@ -748,21 +1019,40 @@ class MacroApp:
                             'position': {'x': current_x, 'y': current_y} if current_x is not None else None
                         }
                         self.current_recorded_events.append(event_data)
-                        if current_x is not None and current_y is not None:
-                            print(f"🎯 錄製 {key} 按下 - 位置: X={current_x:.1f}, Y={current_y:.1f}")
-                            # 更新狀態顯示包含位置資訊
-                            self.root.after(0, lambda x=current_x, y=current_y, count=len(self.current_recorded_events): self.recording_status.config(
-                                text=f"錄製狀態: 錄製中 | 事件數: {count} | 位置: X={x:.1f}, Y={y:.1f}"
-                            ))
+                        # 檢查是否已設定小地圖
+                        if hasattr(self, 'minimap_region') and self.minimap_region:
+                            if current_x is not None and current_y is not None:
+                                print(f"🎯 錄製 {key} 按下 - 位置: X={current_x:.1f}, Y={current_y:.1f}")
+                                self.root.after(0, lambda x=current_x, y=current_y, count=len(self.current_recorded_events): self.recording_status.config(
+                                    text=f"錄製狀態: 錄製中 | 事件數: {count} | 位置: X={x:.1f}, Y={y:.1f}"
+                                ))
+                            else:
+                                print(f"🎯 錄製 {key} 按下 - 位置檢測失敗")
+                                self.root.after(0, lambda count=len(self.current_recorded_events): self.recording_status.config(
+                                    text=f"錄製狀態: 錄製中 | 事件數: {count} | 位置檢測失敗"
+                                ))
                         else:
-                            print(f"⚠️  錄製 {key} 按下 - 無法獲取位置 | 所有按鍵: {list(current_state)}")
+                            print(f"🎯 錄製 {key} 按下 - 小地圖未設定")
                             self.root.after(0, lambda count=len(self.current_recorded_events): self.recording_status.config(
-                                text=f"錄製狀態: 錄製中 | 事件數: {count} | ⚠️ 無位置資訊"
+                                text=f"錄製狀態: 錄製中 | 事件數: {count} | 小地圖未設定"
                             ))
                     
                     for key in new_released:
-                        # 獲取當前位置
-                        current_x, current_y = self.get_current_position()
+                        # 獲取當前位置（只有在小地圖正確設置後才檢測）
+                        current_x, current_y = None, None
+                        
+                        if self.minimap_properly_set:
+                            try:
+                                current_x, current_y = self.get_current_position()
+                                if current_x is not None and current_y is not None:
+                                    position_status = f"位置: X={current_x:.1f}, Y={current_y:.1f}"
+                                else:
+                                    position_status = "位置檢測失敗"
+                            except Exception as e:
+                                position_status = f"位置檢測錯誤: {str(e)[:20]}"
+                                print(f"位置檢測詳細錯誤: {e}")
+                        else:
+                            position_status = "未設置小地圖"
                         
                         event_data = {
                             'type': 'keyboard',
@@ -773,17 +1063,11 @@ class MacroApp:
                             'position': {'x': current_x, 'y': current_y} if current_x is not None else None
                         }
                         self.current_recorded_events.append(event_data)
-                        if current_x is not None and current_y is not None:
-                            print(f"🎯 錄製 {key} 放開 - 位置: X={current_x:.1f}, Y={current_y:.1f}")
-                            # 更新狀態顯示包含位置資訊
-                            self.root.after(0, lambda x=current_x, y=current_y, count=len(self.current_recorded_events): self.recording_status.config(
-                                text=f"錄製狀態: 錄製中 | 事件數: {count} | 位置: X={x:.1f}, Y={y:.1f}"
-                            ))
-                        else:
-                            print(f"⚠️ 錄製 {key} 放開 - 無法獲取位置")
-                            self.root.after(0, lambda count=len(self.current_recorded_events): self.recording_status.config(
-                                text=f"錄製狀態: 錄製中 | 事件數: {count} | ⚠️ 無位置資訊"
-                            ))
+                        
+                        print(f"🎯 錄製 {key} 放開 - {position_status}")
+                        self.root.after(0, lambda count=len(self.current_recorded_events), status=position_status: self.recording_status.config(
+                            text=f"錄製狀態: 錄製中 | 事件數: {count} | {status}"
+                        ))
                     
                     last_state = current_state.copy()
                     
@@ -798,11 +1082,20 @@ class MacroApp:
                 time.sleep(0.1)
                 
         except Exception as e:
-            messagebox.showerror("錯誤", f"錄製過程中發生錯誤: {str(e)}")
+            print(f"❌ 錄製過程中發生錯誤: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            self.root.after(0, lambda: messagebox.showerror("錯誤", f"錄製過程中發生錯誤: {str(e)}"))
             self.events = []
         finally:
-            keyboard.unhook_all()
+            print("🧹 清理錄製資源...")
+            try:
+                keyboard.unhook_all()
+            except Exception as e:
+                print(f"清理 keyboard hook 錯誤: {e}")
+            
             if self.recording:
+                print("🛑 強制停止錄製...")
                 self.recording = False
                 self.root.after(0, self.stop_recording)
 
@@ -814,7 +1107,7 @@ class MacroApp:
         if hasattr(self, 'pressed_keys'):
             for key in self.pressed_keys:
                 try:
-                    pydirectinput.keyUp(key)
+                    self.send_key_input(key, 'up')
                 except Exception as e:
                     print(f"釋放按鍵錯誤 {key}: {e}")
             self.pressed_keys.clear()
@@ -908,6 +1201,7 @@ class MacroApp:
                         if self.playing:  # 修正完成後恢復狀態顯示
                             self.playback_status.config(text=f"播放狀態: 進行中 (迴圈 {self.current_loop}/{self.total_loops})")
                     
+                    # 檢查視窗焦點
                     if not self.check_window_focus():
                         if not self.paused_for_focus:
                             self.paused_for_focus = True
@@ -1047,69 +1341,17 @@ class MacroApp:
                                         # 非方向鍵使用連發
                                         print(f"🔄 執行hold連發: {current_key}")
                                         for i in range(2):
-                                            pydirectinput.keyDown(current_key)
+                                            self.send_key_input(current_key, 'down')
                                             time.sleep(0.005)
-                                            pydirectinput.keyUp(current_key)
+                                            self.send_key_input(current_key, 'up')
                                             time.sleep(0.015)
                                         print(f"⚡ Hold連發完成: {current_key} (2次)")
                                 except Exception as e:
                                     print(f"❌ Hold事件執行錯誤: {e}")
                                 continue
                             
-                            key_mapping = {
-                                # 修飾鍵
-                                'space': 'space',
-                                'shift': 'shiftleft',
-                                'right shift': 'shiftright',
-                                'ctrl': 'ctrlleft',
-                                'right ctrl': 'ctrlright',
-                                'alt': 'altleft',
-                                'right alt': 'altright',
-                                'enter': 'enter',
-                                'tab': 'tab',
-                                'backspace': 'backspace',
-                                'delete': 'delete',
-                                'insert': 'insert',
-                                'home': 'home',
-                                'end': 'end',
-                                'page up': 'pageup',
-                                'page down': 'pagedown',
-                                'esc': 'esc',
-                                
-                                # 功能鍵
-                                'f1': 'f1', 'f2': 'f2', 'f3': 'f3', 'f4': 'f4',
-                                'f5': 'f5', 'f6': 'f6', 'f7': 'f7', 'f8': 'f8',
-                                'f9': 'f9', 'f10': 'f10', 'f11': 'f11', 'f12': 'f12',
-                                
-                                # 方向鍵
-                                'left': 'left', 'right': 'right', 'up': 'up', 'down': 'down',
-                                'arrow left': 'left', 'arrow right': 'right', 
-                                'arrow up': 'up', 'arrow down': 'down',
-                                'left arrow': 'left', 'right arrow': 'right',
-                                'up arrow': 'up', 'down arrow': 'down',
-                                
-                                # 字母鍵 (完整字母表)
-                                'a': 'a', 'b': 'b', 'c': 'c', 'd': 'd', 'e': 'e',
-                                'f': 'f', 'g': 'g', 'h': 'h', 'i': 'i', 'j': 'j',
-                                'k': 'k', 'l': 'l', 'm': 'm', 'n': 'n', 'o': 'o',
-                                'p': 'p', 'q': 'q', 'r': 'r', 's': 's', 't': 't',
-                                'u': 'u', 'v': 'v', 'w': 'w', 'x': 'x', 'y': 'y', 'z': 'z',
-                                
-                                # 符號鍵
-                                '-': '-', '=': '=', '[': '[', ']': ']', '\\': '\\',
-                                ';': ';', "'": "'", ',': ',', '.': '.', '/': '/',
-                                '`': '`',
-                                
-                                # 主鍵盤數字鍵 (保留為技能鍵)
-                                '1': '1', '2': '2', '3': '3', '4': '4', '5': '5',
-                                '6': '6', '7': '7', '8': '8', '9': '9', '0': '0',
-                                
-                                # 小鍵盤功能鍵 (不含數字鍵)
-                                'num lock': 'numlock',
-                                'keypad /': 'divide', 'keypad *': 'multiply',
-                                'keypad -': 'subtract', 'keypad +': 'add',
-                                'keypad .': 'decimal', 'keypad enter': 'enter'
-                            }
+                            # 使用類常數的按鍵映射
+                            key_mapping = self.KEY_MAPPING
                             
                             current_key = key_mapping.get(event['event'], event['event'])
                             pressed_keys = [key_mapping.get(k, k) for k in event.get('pressed_keys', [])]
@@ -1117,6 +1359,14 @@ class MacroApp:
                             # 調試：顯示原始按鍵和映射後的按鍵
                             if event['event'] in ['left', 'right', 'up', 'down'] or current_key in ['left', 'right', 'up', 'down']:
                                 print(f"🎯 方向鍵調試: 原始='{event['event']}' -> 映射='{current_key}'")
+                            elif event['event'] in ['2', '4', '6', '8'] or current_key in ['2', '4', '6', '8']:
+                                print(f"🔢 數字鍵調試: 原始='{event['event']}' -> 映射='{current_key}' (可能錯誤!)")
+                            elif 'keypad' in str(event['event']):
+                                print(f"⌨️ 小鍵盤調試: 原始='{event['event']}' -> 映射='{current_key}'")
+                            elif 'alt' in str(event['event']).lower() or 'ctrl' in str(event['event']).lower():
+                                print(f"🔧 修飾鍵調試: 原始='{event['event']}' -> 映射='{current_key}'")
+                                if current_key == event['event']:  # 沒有映射成功
+                                    print(f"⚠️ 修飾鍵映射失敗! 請檢查 KEY_MAPPING")
                             
                             if event['event_type'] == 'down':
                                 # 若本迴圈被標記抑制跳躍且當前為 space，直接跳過
@@ -1137,13 +1387,13 @@ class MacroApp:
                                             self.execute_skill_with_repeat(current_key, pressed_keys)
                                         else:
                                             try:
-                                                pydirectinput.keyDown(current_key)
+                                                self.send_key_input(current_key, 'down')
                                             except Exception:
                                                 pass
                                             for key in pressed_keys:
                                                 if key != current_key and key not in currently_pressed_keys:
                                                     try:
-                                                        pydirectinput.keyDown(key)
+                                                        self.send_key_input(key, 'down')
                                                         currently_pressed_keys.add(key)
                                                     except Exception:
                                                         pass
@@ -1161,9 +1411,9 @@ class MacroApp:
                                         # 非方向鍵使用連發
                                         print(f"🔄 執行連發: {current_key}")
                                         for i in range(2):
-                                            pydirectinput.keyDown(current_key)
+                                            self.send_key_input(current_key, 'down')
                                             time.sleep(0.005)
-                                            pydirectinput.keyUp(current_key)
+                                            self.send_key_input(current_key, 'up')
                                             time.sleep(0.015)
                                         print(f"⚡ 連發完成: {current_key} (2次)")
                                         
@@ -1176,7 +1426,7 @@ class MacroApp:
                                     # 釋放按鍵
                                     if current_key in currently_pressed_keys:
                                         try:
-                                            pydirectinput.keyUp(current_key)
+                                            self.send_key_input(current_key, 'up')
                                             currently_pressed_keys.remove(current_key)
                                             print(f"🔓 釋放按鍵: {current_key}")
                                         except Exception:
@@ -1201,7 +1451,7 @@ class MacroApp:
             print("🧹 清理按鍵狀態...")
             for key in list(currently_pressed_keys):
                 try:
-                    pydirectinput.keyUp(key)
+                    self.send_key_input(key, 'up')
                     print(f"🔓 釋放殘留按鍵: {key}")
                 except Exception:
                     pass
@@ -1215,7 +1465,7 @@ class MacroApp:
             print("🧹 異常情況下清理按鍵狀態...")
             for key in list(currently_pressed_keys):
                 try:
-                    pydirectinput.keyUp(key)
+                    self.send_key_input(key, 'up')
                     print(f"🔓 釋放殘留按鍵: {key}")
                 except Exception:
                     pass
@@ -2048,6 +2298,7 @@ class MacroApp:
                 
                 # 設定小地圖區域
                 self.minimap_region = (left, top, w, h)
+                self.minimap_properly_set = True  # 標記小地圖已正確設定
                 print(f"🖼️ 已選取小地圖區域: {self.minimap_region}")
                 
                 # 測試截圖
