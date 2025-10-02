@@ -73,6 +73,7 @@ pip install keyboard pydirectinput pyautogui pyperclip opencv-python numpy pillo
 - 修正按鍵錯誤映射
 - 修正方向按鍵錯誤連發
 - 移除Keypad映射
+- 精簡部分無效功能
 ---
 
 ## 已知bug
