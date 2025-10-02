@@ -68,6 +68,9 @@ pip install keyboard pydirectinput pyautogui pyperclip opencv-python numpy pillo
 - 修正連發時長、觸發問題
 - 新增部分自訂義功能
 
+2025/10/02
+- 新增位置修正用的瞬間移動開關
+
 ---
 
 ## 重要聲明
