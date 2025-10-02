@@ -69,7 +69,7 @@ pip install keyboard pydirectinput pyautogui pyperclip opencv-python numpy pillo
 - 新增部分自訂義功能
 
 2025/10/02
-- 新增位置修正用的瞬間移動開關
+- ~~新增位置修正用的瞬間移動開關~~ 已移除相關功能
 - 修正按鍵錯誤映射
 - 修正方向按鍵錯誤連發
 - 移除Keypad映射
