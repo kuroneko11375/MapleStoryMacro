@@ -101,9 +101,13 @@ class MacroApp:
         self.suppress_space_until_loop_end = False  # 校正後本迴圈抑制跳躍
 
         # 視窗與佈局
-        self.root.geometry("590x580")
+        self.root.geometry("690x620")
         
-        # 強制置頂顯示
+        # 設置視窗可調整大小
+        self.root.resizable(True, True)
+        self.root.minsize(690, 620)  # 設置最小尺寸，避免太小
+        
+        # 強制置頂顯示（短暫）
         self.root.attributes('-topmost', True)
         self.root.lift()
         self.root.focus_force()
@@ -178,6 +182,7 @@ class MacroApp:
         # 左側控制面板
         left_panel = ttk.LabelFrame(self.main_frame, text="控制面板", padding=5)
         left_panel.grid(row=0, column=0, padx=5, pady=5, sticky="nsew")
+        left_panel.grid_columnconfigure(0, weight=1)  # 左面板權重設置
 
         # 錄製控制
         record_frame = ttk.LabelFrame(left_panel, text="錄製控制", padding=5)
@@ -218,6 +223,7 @@ class MacroApp:
         # 右側狀態面板
         right_panel = ttk.LabelFrame(self.main_frame, text="狀態資訊", padding=5)
         right_panel.grid(row=0, column=1, padx=5, pady=5, sticky="nsew")
+        right_panel.grid_columnconfigure(0, weight=1)  # 右面板權重設置
 
         # 視窗狀態
         window_frame = ttk.LabelFrame(right_panel, text="視窗控制", padding=5)
@@ -228,7 +234,7 @@ class MacroApp:
         name_frame.pack(fill=tk.X, pady=(0, 5))
         
         ttk.Label(name_frame, text="視窗關鍵字:").pack(side=tk.LEFT)
-        self.window_keywords = tk.StringVar(value="MapleStory,楓之谷")
+        self.window_keywords = tk.StringVar(value="MapleStory")
         keywords_entry = ttk.Entry(name_frame, textvariable=self.window_keywords, width=25)
         keywords_entry.pack(side=tk.LEFT, padx=(5, 0), fill=tk.X, expand=True)
         
@@ -336,6 +342,10 @@ class MacroApp:
         teleport_entry = ttk.Entry(correction_frame, textvariable=self.teleport_key, width=8)
         teleport_entry.grid(row=5, column=1, padx=5)
 
+        # 瞬間移動開關
+        self.enable_teleport = tk.BooleanVar(value=True)
+        ttk.Checkbutton(correction_frame, text="啟用瞬間移動", variable=self.enable_teleport).grid(row=5, column=2, padx=5, sticky="w")
+
         ttk.Label(correction_frame, text="下跳:").grid(row=6, column=0, sticky="w")
         self.down_jump_key = tk.StringVar(value="down+alt")
         down_jump_entry = ttk.Entry(correction_frame, textvariable=self.down_jump_key, width=12)
@@ -344,7 +354,7 @@ class MacroApp:
         # 設定框架權重
         self.main_frame.grid_columnconfigure(1, weight=1)
         self.main_frame.grid_rowconfigure(0, weight=1)
-
+        
         # 初始化修正計數器
         self.correction_attempts = 0
 
@@ -397,11 +407,14 @@ class MacroApp:
                     print(f"⬅️ 向左移動 (距離: {x_diff:.1f}px)")
                     self.execute_horizontal_correction("left", x_diff)
             
-            # 如果距離太遠，使用瞬間移動
+            # 如果啟用瞬間移動且距離太遠，使用瞬間移動
             total_distance = (x_diff**2 + y_diff**2)**0.5
-            if total_distance > threshold * 3:
+            if (self.enable_teleport.get() and 
+                total_distance > threshold * 3):
                 print(f"🌟 距離太遠 ({total_distance:.1f}px)，嘗試瞬間移動")
                 self.execute_correction_move(self.teleport_key.get(), 1)
+            elif total_distance > threshold * 3:
+                print(f"⚠️ 距離太遠 ({total_distance:.1f}px)，但瞬間移動已關閉")
             
             # 短暫等待讓動作完成
             time.sleep(0.5)
@@ -2401,4 +2414,3 @@ if __name__ == "__main__":
         print(f"❌ 啟動失敗: {e}")
         import traceback
         traceback.print_exc()
-
