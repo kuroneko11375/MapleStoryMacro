@@ -101,11 +101,11 @@ class MacroApp:
         self.suppress_space_until_loop_end = False  # 校正後本迴圈抑制跳躍
 
         # 視窗與佈局
-        self.root.geometry("690x620")
+        self.root.geometry("590x600")
         
         # 設置視窗可調整大小
         self.root.resizable(True, True)
-        self.root.minsize(690, 620)  # 設置最小尺寸，避免太小
+        self.root.minsize(590, 600)  # 設置最小尺寸，避免太小
         
         # 強制置頂顯示（短暫）
         self.root.attributes('-topmost', True)
@@ -203,7 +203,6 @@ class MacroApp:
         ttk.Button(file_frame, text="載入腳本", command=self.load_macro).grid(row=0, column=1, padx=2, pady=2)
         ttk.Button(file_frame, text="清除暫存", command=self.clear_macro).grid(row=1, column=0, padx=2, pady=2)
         ttk.Button(file_frame, text="查看事件", command=self.debug_events).grid(row=1, column=1, padx=2, pady=2)
-        ttk.Button(file_frame, text="測試連發", command=self.test_rapid_fire).grid(row=2, column=0, padx=2, pady=2)
 
         # 播放控制
         playback_frame = ttk.LabelFrame(left_panel, text="播放控制", padding=5)
@@ -294,7 +293,7 @@ class MacroApp:
         test_frame.grid(row=5, column=0, columnspan=3, pady=2)
         ttk.Button(test_frame, text="測試擷取", command=self.test_minimap_capture).pack(side="left", padx=2)
         ttk.Button(test_frame, text="開始監控", command=self.start_minimap_monitoring).pack(side="left", padx=2)
-        ttk.Button(test_frame, text="停止監控", command=self.stop_minimap_monitoring).pack(side="left", padx=2)
+        ttk.Button(test_frame, text="停止監控", command=self.stop_minimap_monitoring).pack(side="right", padx=2)
 
         # 自動回程選項
         self.return_var = tk.BooleanVar(value=False)
@@ -305,12 +304,12 @@ class MacroApp:
         ttk.Checkbutton(playback_frame, text="位置驗證", variable=self.position_check_var).grid(row=3, column=0, columnspan=2)
 
         # 自動修正設置
-        correction_frame = ttk.LabelFrame(left_panel, text="自動修正設置", padding=5)
+        correction_frame = ttk.LabelFrame(left_panel, text="自動修正設置(Beta)", padding=5)
         correction_frame.grid(row=3, column=0, padx=5, pady=5, sticky="ew")
 
         # 修正閾值設置
         ttk.Label(correction_frame, text="偏離修正閾值(px):").grid(row=0, column=0, sticky="w")
-        self.correction_threshold = tk.StringVar(value="15")
+        self.correction_threshold = tk.StringVar(value="5")
         threshold_entry = ttk.Entry(correction_frame, textvariable=self.correction_threshold, width=8)
         threshold_entry.grid(row=0, column=1, padx=5)
 
@@ -322,7 +321,7 @@ class MacroApp:
 
         # 垂直跳躍高度閾值
         ttk.Label(correction_frame, text="垂直跳躍閾值(px):").grid(row=2, column=0, sticky="w")
-        self.vertical_jump_threshold = tk.StringVar(value="10")
+        self.vertical_jump_threshold = tk.StringVar(value="5")
         vert_threshold_entry = ttk.Entry(correction_frame, textvariable=self.vertical_jump_threshold, width=8)
         vert_threshold_entry.grid(row=2, column=1, padx=5)
 
@@ -337,19 +336,10 @@ class MacroApp:
         v_jump_entry = ttk.Entry(correction_frame, textvariable=self.vertical_jump_key, width=8)
         v_jump_entry.grid(row=4, column=1, padx=5)
 
-        ttk.Label(correction_frame, text="瞬間移動:").grid(row=5, column=0, sticky="w")
-        self.teleport_key = tk.StringVar(value="x")
-        teleport_entry = ttk.Entry(correction_frame, textvariable=self.teleport_key, width=8)
-        teleport_entry.grid(row=5, column=1, padx=5)
-
-        # 瞬間移動開關
-        self.enable_teleport = tk.BooleanVar(value=True)
-        ttk.Checkbutton(correction_frame, text="啟用瞬間移動", variable=self.enable_teleport).grid(row=5, column=2, padx=5, sticky="w")
-
-        ttk.Label(correction_frame, text="下跳:").grid(row=6, column=0, sticky="w")
+        ttk.Label(correction_frame, text="下跳:").grid(row=5, column=0, sticky="w")
         self.down_jump_key = tk.StringVar(value="down+alt")
         down_jump_entry = ttk.Entry(correction_frame, textvariable=self.down_jump_key, width=12)
-        down_jump_entry.grid(row=6, column=1, padx=5)
+        down_jump_entry.grid(row=5, column=1, padx=5)
 
         # 設定框架權重
         self.main_frame.grid_columnconfigure(1, weight=1)
@@ -407,15 +397,6 @@ class MacroApp:
                     print(f"⬅️ 向左移動 (距離: {x_diff:.1f}px)")
                     self.execute_horizontal_correction("left", x_diff)
             
-            # 如果啟用瞬間移動且距離太遠，使用瞬間移動
-            total_distance = (x_diff**2 + y_diff**2)**0.5
-            if (self.enable_teleport.get() and 
-                total_distance > threshold * 3):
-                print(f"🌟 距離太遠 ({total_distance:.1f}px)，嘗試定向瞬間移動")
-                self.execute_directional_teleport(current_x, current_y, expected_x, expected_y)
-            elif total_distance > threshold * 3:
-                print(f"⚠️ 距離太遠 ({total_distance:.1f}px)，但瞬間移動已關閉")
-            
             # 短暫等待讓動作完成
             time.sleep(0.5)
             return True
@@ -423,56 +404,6 @@ class MacroApp:
         except Exception as e:
             print(f"❌ 自動修正執行錯誤: {e}")
             return False
-
-    def execute_directional_teleport(self, current_x, current_y, expected_x, expected_y):
-        """執行定向瞬間移動"""
-        try:
-            x_diff = expected_x - current_x
-            y_diff = expected_y - current_y
-            
-            # 決定主要移動方向
-            if abs(x_diff) > abs(y_diff):
-                # 水平移動為主
-                if x_diff > 0:
-                    direction = "right"
-                    print(f"🌟 向右瞬移 (X偏差: {x_diff:.1f}px)")
-                else:
-                    direction = "left"
-                    print(f"🌟 向左瞬移 (X偏差: {x_diff:.1f}px)")
-            else:
-                # 垂直移動為主
-                if y_diff < 0:
-                    direction = "up"
-                    print(f"🌟 向上瞬移 (Y偏差: {y_diff:.1f}px)")
-                else:
-                    direction = "down"
-                    print(f"🌟 向下瞬移 (Y偏差: {y_diff:.1f}px)")
-            
-            # 執行定向瞬移：按住方向鍵 + 瞬移技能
-            teleport_key = self.teleport_key.get()
-            
-            # 檢查瞬移鍵是否已經是組合鍵
-            if '+' in teleport_key:
-                # 如果已經是組合鍵，直接使用
-                print(f"🎮 執行組合瞬移: {teleport_key}")
-                self.execute_correction_move(teleport_key, 1)
-            else:
-                # 如果是單一按鍵，與方向鍵組合
-                print(f"🎮 執行定向瞬移: {direction} + {teleport_key}")
-                
-                # 按住方向鍵
-                pydirectinput.keyDown(direction)
-                time.sleep(0.05)
-                
-                # 執行瞬移
-                pydirectinput.press(teleport_key)
-                time.sleep(0.1)
-                
-                # 釋放方向鍵
-                pydirectinput.keyUp(direction)
-                
-        except Exception as e:
-            print(f"❌ 定向瞬移執行錯誤: {e}")
 
     def execute_correction_move(self, key, count):
         """執行修正動作"""
@@ -1561,104 +1492,6 @@ class MacroApp:
         
         text_widget.insert(tk.END, debug_text)
         text_widget.config(state=tk.DISABLED)
-
-    def test_rapid_fire(self):
-        """測試連發功能"""
-        test_window = tk.Toplevel(self.root)
-        test_window.title("連發測試")
-        test_window.geometry("300x200")
-        
-        ttk.Label(test_window, text="選擇要測試的按鍵:").pack(pady=10)
-        
-        key_var = tk.StringVar(value="z")
-        key_entry = ttk.Entry(test_window, textvariable=key_var, width=10)
-        key_entry.pack(pady=5)
-        
-        def do_test():
-            key = key_var.get().lower()
-            print(f"開始測試連發: {key}")
-            
-            # 等待5秒讓用戶切換到遊戲窗口
-            for i in range(5, 0, -1):
-                print(f"倒數 {i} 秒...")
-                time.sleep(1)
-            
-            print("開始連發測試!")
-            
-            # 測試不同的連發方式，每種之間有明顯間隔
-            try:
-                # 方式1: 慢速測試 - 先讓用戶看到單次按鍵效果
-                print("=== 方式1: 單次按鍵測試 (5次，間隔1秒) ===")
-                for i in range(5):
-                    print(f"  單次按鍵 {i+1}/5")
-                    pydirectinput.press(key)
-                    time.sleep(1)
-                print("=== 方式1: 完成 ===")
-                
-                time.sleep(3)  # 長間隔便於區分
-                
-                # 方式2: 中速連發
-                print("=== 方式2: 中速連發 (持續5秒，每秒約10次) ===")
-                start_time = time.time()
-                count = 0
-                while time.time() - start_time < 5.0:
-                    pydirectinput.press(key)
-                    count += 1
-                    time.sleep(0.1)  # 每100ms一次
-                print(f"=== 方式2: 完成 (共 {count} 次) ===")
-                
-                time.sleep(3)
-                
-                # 方式3: 快速連發
-                print("=== 方式3: 快速連發 (持續5秒，每秒約50次) ===")
-                start_time = time.time()
-                count = 0
-                while time.time() - start_time < 5.0:
-                    pydirectinput.keyDown(key)
-                    time.sleep(0.005)
-                    pydirectinput.keyUp(key)
-                    time.sleep(0.015)
-                    count += 1
-                print(f"=== 方式3: 完成 (共 {count} 次) ===")
-                
-                time.sleep(3)
-                
-                # 方式4: 極速連發
-                print("=== 方式4: 極速連發 (持續5秒，每秒約100次) ===")
-                start_time = time.time()
-                count = 0
-                while time.time() - start_time < 5.0:
-                    pydirectinput.keyDown(key)
-                    time.sleep(0.001)
-                    pydirectinput.keyUp(key)
-                    time.sleep(0.009)
-                    count += 1
-                print(f"=== 方式4: 完成 (共 {count} 次) ===")
-                
-                time.sleep(3)
-                
-                # 方式5: 持續按住
-                print("=== 方式5: 持續按住不放 (5秒) ===")
-                pydirectinput.keyDown(key)
-                time.sleep(5.0)
-                pydirectinput.keyUp(key)
-                print("=== 方式5: 完成 ===")
-                
-                print("所有測試完成! 請告訴我哪種方式效果最好")
-                
-            except Exception as e:
-                print(f"測試錯誤: {e}")
-                # 確保釋放按鍵
-                try:
-                    pydirectinput.keyUp(key)
-                except:
-                    pass
-        
-        ttk.Button(test_window, text="開始測試 (3秒後)", 
-                  command=lambda: threading.Thread(target=do_test, daemon=True).start()).pack(pady=10)
-        
-        ttk.Label(test_window, text="請在測試開始前切換到遊戲窗口", 
-                 foreground="red").pack(pady=5)
 
     def clear_macro(self):
         if self.events:
