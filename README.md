@@ -70,9 +70,11 @@ pip install keyboard pydirectinput pyautogui pyperclip opencv-python numpy pillo
 
 2025/10/02
 - 新增位置修正用的瞬間移動開關
+---
 
-# 已知bug
+## 已知bug
 方向鍵連發問題、方向鍵映射問題
+
 ---
 
 ## 重要聲明
